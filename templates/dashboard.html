@@ -1,0 +1,3646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real Data Trading Dashboard - CE/PE Analytics</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #0a0e27 0%, #1a1d35 50%, #0f1419 100%);
+    color: #e8edf5;
+    overflow-x: hidden;
+    font-size: 16px;
+}
+
+/* Warning Banner */
+.warning-banner {
+    background: linear-gradient(135deg, #e63946, #f72c3e);
+    color: white;
+    padding: 12px 24px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 1001;
+    box-shadow: 0 4px 20px rgba(230, 57, 70, 0.4);
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.85; }
+}
+
+.warning-banner i {
+    margin-right: 8px;
+}
+
+/* Trading Status Bar */
+.trading-status-bar {
+    background: rgba(10, 14, 39, 0.98);
+    backdrop-filter: blur(20px);
+    padding: 8px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 1001;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(99, 179, 237, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.real-data-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.15), rgba(16, 185, 129, 0.15));
+    border: 1px solid rgba(45, 212, 191, 0.4);
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2dd4bf;
+}
+
+.live-data-dot {
+    width: 6px;
+    height: 6px;
+    background: #2dd4bf;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+    box-shadow: 0 0 10px rgba(45, 212, 191, 0.6);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.3); }
+}
+
+/* Auto Scrip Update Indicator */
+.auto-scrip-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.15), rgba(168, 85, 247, 0.15));
+    border: 1px solid rgba(147, 51, 234, 0.4);
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #a855f7;
+}
+
+.auto-scrip-dot {
+    width: 6px;
+    height: 6px;
+    background: #a855f7;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
+}
+
+/* Sidebar Navigation */
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 84px;
+    width: 280px;
+    height: calc(100vh - 84px);
+    background: linear-gradient(180deg, rgba(10, 14, 39, 0.98) 0%, rgba(15, 20, 41, 0.98) 100%);
+    backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(99, 179, 237, 0.15);
+    z-index: 1000;
+    transition: transform 0.3s ease;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-header {
+    padding: 24px;
+    border-bottom: 1px solid rgba(99, 179, 237, 0.15);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 20px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.nav-menu {
+    padding: 24px 0;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    color: #94a3b8;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+    position: relative;
+}
+
+.nav-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    background: linear-gradient(90deg, #60a5fa, transparent);
+    transition: width 0.3s ease;
+}
+
+.nav-item:hover, .nav-item.active {
+    background: linear-gradient(90deg, rgba(96, 165, 250, 0.15), transparent);
+    color: #60a5fa;
+    border-left-color: #60a5fa;
+}
+
+.nav-item:hover::before, .nav-item.active::before {
+    width: 100%;
+}
+
+.nav-item i {
+    width: 20px;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+}
+
+/* Main Content */
+.main-content {
+    margin-left: 280px;
+    margin-top: 15px;
+    min-height: calc(100vh - 84px);
+}
+
+/* Top Bar */
+.top-bar {
+    background: linear-gradient(135deg, rgba(10, 14, 39, 0.98), rgba(15, 20, 41, 0.98));
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(99, 179, 237, 0.2);
+    padding: 16px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+.top-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.trading-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-active {
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.2), rgba(16, 185, 129, 0.2));
+    color: #2dd4bf;
+    border: 1px solid rgba(45, 212, 191, 0.4);
+    box-shadow: 0 0 20px rgba(45, 212, 191, 0.2);
+}
+
+.status-inactive {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2));
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.control-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+.control-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.control-btn:hover::before {
+    width: 300px;
+    height: 300px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 6px 25px rgba(59, 130, 246, 0.6);
+    transform: translateY(-2px);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+
+.btn-danger:hover {
+    box-shadow: 0 6px 25px rgba(239, 68, 68, 0.6);
+    transform: translateY(-2px);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+}
+
+.btn-warning:hover {
+    box-shadow: 0 6px 25px rgba(245, 158, 11, 0.6);
+    transform: translateY(-2px);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, rgba(71, 85, 105, 0.6), rgba(51, 65, 85, 0.6));
+    color: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, rgba(71, 85, 105, 0.8), rgba(51, 65, 85, 0.8));
+    transform: translateY(-2px);
+}
+
+.control-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-loading {
+    opacity: 0.8;
+    cursor: not-allowed;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    margin: auto;
+    border: 2px solid transparent;
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* For inputs and dropdowns */
+.form-input,
+select,
+option {
+  color: #b3c4dd !important;        /* Set font color (Blue, or any dark color you like) */
+  background: #1a1d35 !important;   /* Set dropdown background (dark, matches your theme) */
+}
+
+/* For options in dropdown specifically */
+select option {
+  color: #e8edf5 !important;        /* Set dropdown option color (light, readable) */
+  background: #1a1d35 !important;   /* Set background for options */
+}
+
+
+
+/* Dashboard Content */
+.dashboard-content {
+    padding: 32px;
+    display: none;
+}
+
+.dashboard-content.active {
+    display: block;
+}
+
+/* Dashboard Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 350px;
+    grid-template-rows: auto auto auto auto;
+    gap: 24px;
+    grid-template-areas: 
+        "overview overview overview"
+        "ce-market pe-market alerts"
+        "ce-stats pe-stats portfolio"
+        "orders orders orders";
+}
+
+/* Card Styles */
+.card {
+    background: linear-gradient(135deg, rgba(15, 20, 41, 0.9), rgba(20, 25, 45, 0.9));
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(99, 179, 237, 0.2);
+    border-radius: 24px;
+    padding: 20px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    height: auto;
+    width: auto;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #60a5fa, #3b82f6, #a855f7);
+    border-radius: 24px 24px 0 0;
+}
+
+.card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at top right, rgba(96, 165, 250, 0.05), transparent 50%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+}
+
+.card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(96, 165, 250, 0.2);
+    border-color: rgba(96, 165, 250, 0.4);
+}
+
+.card:hover::after {
+    opacity: 1;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.card-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-subtitle {
+    font-size: 16px;
+    font-weight: 500;
+    color: #94a3b8;
+    margin-top: 4px;
+}
+
+.real-data-badge {
+    padding: 2px 4px;
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.2), rgba(16, 185, 129, 0.2));
+    border: 1px solid rgba(45, 212, 191, 0.4);
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #2dd4bf;
+    text-transform: uppercase;
+}
+
+/* Auto Update Badge */
+.auto-update-badge {
+    padding: 4px 8px;
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.2), rgba(168, 85, 247, 0.2));
+    border: 1px solid rgba(147, 51, 234, 0.4);
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #a855f7;
+    text-transform: uppercase;
+}
+
+.card.ce-stats,
+.card.pe-stats,
+.card.portfolio-panel {
+    min-height: 300px;
+    height: auto;
+}
+
+
+
+.card.alerts-panel {
+  max-width: 350px;   /* Change to desired max */
+  width: 100%;
+  height: 600px;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.card.ce-market-new,
+.card.pe-market-new {
+  min-width: 600px;  /* Or whatever size fits your dashboard design */
+  width: 100%;
+  margin-left: 0px;
+  margin-right: 0px;
+}
+
+
+/* Overview Section */
+.overview-section {
+    grid-area: overview;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.metric-card {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.1));
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 16px;
+    padding: 20px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #60a5fa, #3b82f6);
+}
+
+.metric-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(96, 165, 250, 0.1), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+    border-color: rgba(96, 165, 250, 0.5);
+}
+
+.metric-card:hover::after {
+    opacity: 1;
+}
+
+.metric-value {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+}
+
+.metric-label {
+    font-size: 12px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.metric-change {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.positive { 
+    color: #2dd4bf; 
+    text-shadow: 0 0 10px rgba(45, 212, 191, 0.3);
+}
+.negative { 
+    color: #ef4444; 
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+.neutral { color: #94a3b8; }
+
+/* Market Cards */
+.ce-market { grid-area: ce-market; }
+.pe-market { grid-area: pe-market; }
+.alerts-panel { grid-area: alerts; }
+.ce-stats { grid-area: ce-stats; }
+.pe-stats { grid-area: pe-stats; }
+.portfolio-panel { grid-area: portfolio; }
+.orders-panel { grid-area: orders; }
+
+/* Market Data Grid */
+.market-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 2fr);
+    gap: 12px;
+}
+
+.market-item {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.6));
+    border-radius: 12px;
+    padding: 16px;
+    border-left: 4px solid #60a5fa;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.market-item:hover {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
+    transform: translateX(4px);
+}
+
+.market-item.updating::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    background: #2dd4bf;
+    border-radius: 50%;
+    animation: pulse 1s infinite;
+    box-shadow: 0 0 10px rgba(45, 212, 191, 0.6);
+}
+
+.market-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+}
+
+.market-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+/* Chart Container */
+.chart-container {
+    position: relative;
+    height: 250px;
+    margin-top: 20px;
+}
+
+.chart-container canvas {
+    height: 100% !important;
+    width: 100% !important;
+}
+
+/* Alerts Panel */
+.alert-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.6));
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border-left: 4px solid #f59e0b;
+    animation: slideIn 0.3s ease;
+    transition: all 0.3s ease;
+}
+
+.alert-item:hover {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
+    transform: translateX(4px);
+}
+
+.alert-item.success { border-left-color: #2dd4bf; }
+.alert-item.error { border-left-color: #ef4444; }
+.alert-item.warning { border-left-color: #f59e0b; }
+.alert-item.info { border-left-color: #60a5fa; }
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.alert-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(245, 158, 11, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f59e0b;
+}
+
+.alert-icon.success { background: rgba(45, 212, 191, 0.2); color: #2dd4bf; }
+.alert-icon.error { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.alert-icon.warning { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+.alert-icon.info { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
+
+.alert-content {
+    flex: 1;
+}
+
+.alert-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 4px;
+}
+
+.alert-time {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+/* Toast Notification */
+.toast {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    background: linear-gradient(135deg, rgba(15, 20, 41, 0.98), rgba(20, 25, 45, 0.98));
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(99, 179, 237, 0.3);
+    border-radius: 16px;
+    padding: 16px 20px;
+    color: #f1f5f9;
+    z-index: 1002;
+    transform: translateX(400px);
+    transition: transform 0.3s ease;
+    min-width: 300px;
+    max-width: 400px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.toast.show {
+    transform: translateX(0);
+}
+
+.toast.success { border-left: 4px solid #2dd4bf; }
+.toast.error { border-left: 4px solid #ef4444; }
+.toast.warning { border-left: 4px solid #f59e0b; }
+.toast.info { border-left: 4px solid #60a5fa; }
+
+.toast-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.toast-title {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 18px;
+    margin-left: auto;
+    transition: color 0.2s ease;
+}
+
+.toast-close:hover {
+    color: #f1f5f9;
+}
+
+.toast-message {
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+/* Portfolio Panel */
+.portfolio-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(99, 179, 237, 0.1);
+    transition: all 0.2s ease;
+}
+
+.portfolio-item:hover {
+    padding-left: 8px;
+    background: linear-gradient(90deg, rgba(96, 165, 250, 0.05), transparent);
+}
+
+.portfolio-item:last-child {
+    border-bottom: none;
+}
+
+.portfolio-label {
+    font-size: 14px;
+    color: #64748b;
+}
+
+.portfolio-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f1f5f9;
+}
+
+/* Orders Table */
+.orders-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.orders-table th,
+.orders-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(99, 179, 237, 0.1);
+}
+
+.orders-table th {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.6));
+    color: #94a3b8;
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.orders-table tr {
+    transition: all 0.2s ease;
+}
+
+.orders-table tr:hover {
+    background: linear-gradient(90deg, rgba(96, 165, 250, 0.08), transparent);
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-executed {
+    background: rgba(45, 212, 191, 0.2);
+    color: #2dd4bf;
+    border: 1px solid rgba(45, 212, 191, 0.3);
+}
+
+.status-pending {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-failed {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Type Badges */
+.type-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.type-ce {
+    background: rgba(96, 165, 250, 0.2);
+    color: #60a5fa;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.type-pe {
+    background: rgba(168, 85, 247, 0.2);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+/* Settings Panel */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 8px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.6));
+    border: 1px solid rgba(99, 179, 237, 0.3);
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
+}
+
+/* Analytics Charts */
+.analytics-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.chart-card {
+    background: linear-gradient(135deg, rgba(15, 20, 41, 0.9), rgba(20, 25, 45, 0.9));
+    border: 1px solid rgba(99, 179, 237, 0.2);
+    border-radius: 16px;
+    padding: 24px;
+}
+
+/* Loading States */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(96, 165, 250, 0.3);
+    border-radius: 50%;
+    border-top-color: #60a5fa;
+    animation: spin 1s ease-in-out infinite;
+}
+
+.error-message {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1));
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #ef4444;
+    padding: 12px;
+    border-radius: 8px;
+    margin: 10px 0;
+    font-size: 14px;
+}
+
+/* Position Status Indicators */
+.position-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.pos-long {
+    background: rgba(45, 212, 191, 0.2);
+    color: #2dd4bf;
+    border: 1px solid rgba(45, 212, 191, 0.3);
+}
+
+.pos-short {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Connection Status */
+.connection-status {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+}
+
+.connection-online {
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.2), rgba(16, 185, 129, 0.2));
+    color: #2dd4bf;
+    border: 1px solid rgba(45, 212, 191, 0.4);
+    box-shadow: 0 4px 20px rgba(45, 212, 191, 0.2);
+}
+
+.connection-offline {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2));
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* Enhanced Square Off Button */
+.square-off-confirmation {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.confirmation-dialog {
+    background: linear-gradient(135deg, rgba(15, 20, 41, 0.98), rgba(20, 25, 45, 0.98));
+    border: 1px solid rgba(99, 179, 237, 0.3);
+    border-radius: 24px;
+    padding: 32px;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+}
+
+.confirmation-title {
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+}
+
+.confirmation-message {
+    font-size: 16px;
+    color: #94a3b8;
+    margin-bottom: 24px;
+    line-height: 1.5;
+}
+
+.confirmation-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+}
+
+/* Position Summary Cards */
+.position-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.position-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.6));
+    border-radius: 16px;
+    padding: 20px;
+    border-left: 4px solid #60a5fa;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.position-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, rgba(96, 165, 250, 0.1), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.position-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+}
+
+.position-card:hover::before {
+    opacity: 1;
+}
+
+.position-card.ce { 
+    border-left-color: #60a5fa;
+}
+
+.position-card.pe { 
+    border-left-color: #a855f7;
+}
+
+.position-card.no-position { 
+    border-left-color: #64748b; 
+    opacity: 0.6;
+}
+
+.position-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.position-type {
+    font-size: 18px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+.position-side {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.side-buy {
+    background: rgba(45, 212, 191, 0.2);
+    color: #2dd4bf;
+    border: 1px solid rgba(45, 212, 191, 0.3);
+}
+
+.side-sell {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.position-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.position-detail {
+    display: flex;
+    justify-content: space-between;
+}
+
+.position-detail-label {
+    color: #94a3b8;
+}
+
+.position-detail-value {
+    color: #f1f5f9;
+    font-weight: 600;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas: 
+            "overview overview"
+            "ce-market pe-market"
+            "alerts portfolio"
+            "ce-stats pe-stats"
+            "orders orders";
+    }
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+    }
+    
+    .main-content {
+        margin-left: 0;
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        padding: 16px;
+        grid-template-areas: 
+            "overview"
+            "ce-market"
+            "pe-market"
+            "alerts"
+            "portfolio"
+            "ce-stats"
+            "pe-stats"
+            "orders";
+    }
+    
+    .overview-section {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .position-summary {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(15, 20, 41, 0.5);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+/* Additional Glow Effects */
+.metric-card:hover .metric-value {
+    text-shadow: 0 0 20px rgba(96, 165, 250, 0.5);
+}
+
+.card:hover .card-title {
+    text-shadow: 0 0 15px rgba(96, 165, 250, 0.3);
+}
+
+/* Animated Background Effect */
+@keyframes gradient-shift {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+body {
+    background: linear-gradient(135deg, #0a0e27 0%, #1a1d35 25%, #0f1419 50%, #1a1d35 75%, #0a0e27 100%);
+    background-size: 400% 400%;
+    animation: gradient-shift 20s ease infinite;
+}
+
+/* Neon Glow for Active Elements */
+.trading-status.status-active {
+    animation: neon-pulse 2s ease-in-out infinite;
+}
+
+@keyframes neon-pulse {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(45, 212, 191, 0.2),
+                    0 0 10px rgba(45, 212, 191, 0.2),
+                    0 0 20px rgba(45, 212, 191, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 10px rgba(45, 212, 191, 0.4),
+                    0 0 20px rgba(45, 212, 191, 0.3),
+                    0 0 40px rgba(45, 212, 191, 0.2);
+    }
+}
+
+/* Enhanced Form Focus States */
+.form-input:focus {
+    animation: input-glow 0.3s ease-in-out;
+}
+
+@keyframes input-glow {
+    0% {
+        box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.4);
+    }
+    100% {
+        box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    }
+}
+    </style>
+</head>
+<body>
+   
+
+    <div class="trading-status-bar" style="
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 100%);
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    font-family: 'Segoe UI', 'Roboto', sans-serif;
+    min-height: 70px;
+">
+    <!-- Main Market Data -->
+    <div style="
+        display: flex; 
+        gap: 32px; 
+        align-items: center;
+        flex: 1;
+    ">
+        <div style="
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            flex-wrap: wrap;
+        ">
+            <!-- Nifty -->
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="
+                    font-size: 22px; 
+                    font-weight: 700;
+                    color: #1d70db;
+                    text-shadow: 0 0 6px rgba(64, 223, 215, 0.4);
+                ">NIFTY : </span>
+                <span id="niftyLastRate" style="
+                    font-size: 22px; 
+                    font-weight: 600;
+                    color: #9ec2ad;
+                ">₹0.00</span>
+                <span id="niftyChg" style="
+                    font-size: 22px; 
+                    font-weight: 500;
+                    color: #9ec2ad;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                ">+0.00</span>
+                <span id="niftyChgPcnt" style="
+                    font-size: 22px; 
+                    font-weight: 500;
+                    color: #9ec2ad;
+                ">(+0.00%)</span>
+            </div>
+
+            <!-- Separator -->
+            <div style="
+                width: 2px;
+                height: 35px;
+                background: linear-gradient(to bottom, transparent, #40dfd7, transparent);
+                opacity: 0.6;
+            "></div>
+
+            <!-- Sensex -->
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="
+                    font-size: 22px; 
+                    font-weight: 700;
+                    color: #1d70db;
+                    text-shadow: 0 0 6px rgba(64, 223, 215, 0.4);
+                ">SENSEX :</span>
+                <span id="sensexLastRate" style="
+                    font-size: 22px; 
+                    font-weight: 600;
+                    color: #9ec2ad;
+                ">₹0.00</span>
+                <span id="sensexChg" style="
+                    font-size: 22px; 
+                    font-weight: 500;
+                    color: #9ec2ad;
+                    /* background: rgba(72, 187, 120, 0.15); */
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                ">+0.00</span>
+                <span id="sensexChgPcnt" style="
+                    font-size: 22px; 
+                    font-weight: 500;
+                    color: #9ec2ad;
+                ">(+0.00%)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Trading Data -->
+    <div style="
+        display: flex; 
+        gap: 16px; 
+        align-items: center;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+    ">
+        <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="
+                font-size: 14px; 
+                font-weight: 600;
+                color: #16e242;
+                text-shadow: 0 0 6px rgba(22, 226, 66, 0.3);
+            ">CE:</span>
+            <span id="quickCePrice" style="
+                font-size: 15px; 
+                font-weight: 500;
+                color: #ffffff;
+            ">₹0.00</span>
+        </div>
+
+        <div style="
+            width: 1px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+        "></div>
+
+        <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="
+                font-size: 14px; 
+                font-weight: 600;
+                color: #16e242;
+                text-shadow: 0 0 6px rgba(22, 226, 66, 0.3);
+            ">PE:</span>
+            <span id="quickPePrice" style="
+                font-size: 15px; 
+                font-weight: 500;
+                color: #ffffff;
+            ">₹0.00</span>
+        </div>
+
+        <div style="
+            width: 1px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+        "></div>
+
+        <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="
+                font-size: 14px; 
+                font-weight: 600;
+                color: #16e242;
+                text-shadow: 0 0 6px rgba(22, 226, 66, 0.3);
+            ">P&L:</span>
+            <span id="quickPnl" class="positive" style="
+                font-size: 15px; 
+                font-weight: 600;
+                color: #48bb78;
+                background: rgba(72, 187, 120, 0.15);
+                padding: 2px 6px;
+                border-radius: 4px;
+                border: 1px solid rgba(72, 187, 120, 0.3);
+            ">₹0.00</span>
+        </div>
+    </div>
+</div>
+    
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <i class="fas fa-chart-line"></i>
+                <span>TradePro Real</span>
+            </div>
+        </div>
+        <nav class="nav-menu">
+            <div class="nav-item active" onclick="showSection('dashboard')">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Dashboard</span>
+            </div>
+            <div class="nav-item" onclick="showSection('analytics')">
+                <i class="fas fa-chart-bar"></i>
+                <span>Analytics</span>
+            </div>
+            <div class="nav-item" onclick="showSection('portfolio')">
+                <i class="fas fa-wallet"></i>
+                <span>Portfolio</span>
+            </div>
+            <div class="nav-item" onclick="showSection('alerts')">
+                <i class="fas fa-bell"></i>
+                <span>Alerts</span>
+            </div>
+            <div class="nav-item" onclick="showSection('settings')">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </div>
+            <div class="nav-item" onclick="showSection('positions')">
+                <i class="fas fa-crosshairs"></i>
+                <span>Positions</span>
+            </div>
+            <div class="nav-item" onclick="showSection('optiongreek')">
+                <i class="fas fa-crosshairs"></i>
+                <span>Option Greek</span>
+            </div>
+                <div class="nav-item" onclick="showSection('tradeHistory')">
+                <i class="fas fa-history"></i>
+                <span>Trade History</span>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="breadcrumb">
+                <i class="fas fa-home"></i>
+                <span id="currentSection">Dashboard</span>
+                <i class="fas fa-chevron-right"></i>
+                <span>Real Data Trading</span>
+            </div>
+            <div class="top-controls">
+                <div class="trading-status" id="tradingStatus">
+                    <div class="live-data-dot"></div>
+                    <span class="status-inactive">INACTIVE</span>
+                </div>
+                <button class="control-btn btn-primary" id="startTradingBtn" onclick="startTrading()">
+                    <i class="fas fa-play"></i>
+                    Start Trading
+                </button>
+                <button class="control-btn btn-danger" id="stopTradingBtn" onclick="stopTrading()">
+                    <i class="fas fa-stop"></i>
+                    Stop Trading
+                </button>
+                <button class="control-btn btn-warning" id="squareOffBtn" onclick="showSquareOffConfirmation()">
+                    <i class="fas fa-square"></i>
+                    Square Off All
+                </button>
+            </div>
+        </div>
+
+        <!-- Square Off Confirmation Dialog -->
+        <div class="square-off-confirmation" id="squareOffConfirmation">
+            <div class="confirmation-dialog">
+                <div class="confirmation-title">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Confirm Square Off
+                </div>
+                <div class="confirmation-message">
+                    Are you sure you want to square off all open positions?<br>
+                    This action will close all CE and PE positions immediately at current market prices.
+                    <div id="positionSummaryForConfirm" style="margin-top: 16px; font-size: 14px;"></div>
+                </div>
+                <div class="confirmation-buttons">
+                    <button class="control-btn btn-secondary" onclick="hideSquareOffConfirmation()">
+                        <i class="fas fa-times"></i>
+                        Cancel
+                    </button>
+                    <button class="control-btn btn-warning" onclick="confirmSquareOff()">
+                        <i class="fas fa-square"></i>
+                        Yes, Square Off All
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div class="dashboard-content active" id="dashboardSection">
+            <!-- Position Summary Cards -->
+            <div class="position-summary">
+                <div class="position-card ce" id="cePositionCard">
+                    <div class="position-header">
+                        <div class="position-type">CE Position</div>
+                        <div class="position-side side-buy" id="cePositionSide" style="font-size: large;">NO POSITION</div>
+                    </div>
+                    <div class="position-details" id="cePositionDetails">
+                        <div class="position-detail">
+                            <span class="position-detail-label" style="font-size: 24px;">Entry Price:</span>
+                            <span class="position-detail-value" id="ceEntryPrice" style="font-size: 24px;">₹0.00</span>
+                        </div>
+                        <div class="position-detail">
+                            <span class="position-detail-label" style="font-size: 24px;">Current Price:</span>
+                            <span class="position-detail-value" id="ceCurrentPrice" style="font-size: 24px;">₹0.00</span>
+                        </div>
+                        <div class="position-detail">
+                            <span class="position-detail-label" style="font-size: 24px;">Quantity:</span>
+                            <span class="position-detail-value" id="ceQuantity" style="font-size: 24px;">0</span>
+                        </div>
+                        <div class="position-detail">
+                            <span class="position-detail-label" style="font-size: 24px;">Current P&L:</span>
+                            <span class="position-detail-value" id="cePnl" style="font-size: 24px;">₹0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="position-card pe" id="pePositionCard">
+                    <div class="position-header">
+                        <div class="position-type">PE Position</div>
+                        <div class="position-side side-buy" id="pePositionSide" style="font-size: large;">NO POSITION</div>
+                    </div>
+                    <div class="position-details" id="pePositionDetails">
+                        <div class="position-detail">
+                            <span class="position-detail-label" style="font-size: 24px;">Entry Price:</span>
+                            <span class="position-detail-value" id="peEntryPrice" style="font-size: 24px;">₹0.00</span>
+                        </div>
+                        <div class="position-detail">
+                            <span class="position-detail-label" style="font-size: 24px;">Current Price:</span>
+                            <span class="position-detail-value" id="peCurrentPrice" style="font-size: 24px;">₹0.00</span>
+                        </div>
+                        <div class="position-detail">
+                            <span class="position-detail-label" style="font-size: 24px;">Quantity:</span>
+                            <span class="position-detail-value" id="peQuantity" style="font-size: 24px;">0</span>
+                        </div>
+                        <div class="position-detail">
+                            <span class="position-detail-label" style="font-size: 24px;">Current P&L:</span>
+                            <span class="position-detail-value" id="pePnl" style="font-size: 24px;">₹0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Overview Metrics -->
+                <div class="overview-section">
+                    <div class="metric-card">
+                        <div class="metric-value" id="totalTrades">0</div>
+                        <div class="metric-label">Total Trades</div>
+                        <div class="metric-change" id="tradesChange">Live Count</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="winRate">0%</div>
+                        <div class="metric-label">Win Rate</div>
+                        <div class="metric-change" id="winRateChange">Real Stats</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="activePositions">0</div>
+                        <div class="metric-label">Active Positions</div>
+                        <div class="metric-change" id="positionsChange">Live</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="totalPnl">₹0.00</div>
+                        <div class="metric-label">Total P&L</div>
+                        <div class="metric-change" id="pnlChange">Real Money</div>
+                    </div>
+                </div>
+
+                <!-- CE Market Data -->
+                <div class="card ce-market-new">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">
+                                <i class="fas fa-arrow-trend-up" style="color: #06b6d4;"></i>
+                                CE Market Data
+                                <span class="real-data-badge">Real LTP</span>
+                                <span class="auto-update-badge" id="ceAutoUpdateBadge">AUTO</span>
+                            </div>
+                            <div class="card-subtitle"><span id="ceScripName" style="font-size: 20px;">Loading...</span></div>
+                        </div>
+                    </div>
+                    <div class="market-grid">
+                        <div class="market-item updating">
+                            <div class="market-label">LTP</div>
+                            <div class="market-value" id="ceLtp">₹0.00</div>
+                        </div>
+                        <div class="market-item">
+                            <div class="market-label">Range %</div>
+                            <div class="market-value" id="ceRange">0.00%</div>
+                        </div>
+                        <div class="market-item">
+                        <div class="market-label">High Price</div>
+                            <div class="market-value" id="ceHighPrice">₹0.00</div>
+                        </div>
+                        <div class="market-item">
+                            <div class="market-label">Low Price</div>
+                            <div class="market-value" id="ceLowPrice">₹0.00</div>
+                        </div>
+                        <div class="market-item">
+                            <div class="market-label">SMMA 300</div>
+                            <div class="market-value" id="ceSmma300">₹0.00</div>
+                        </div>
+                        <div class="market-item">
+                            <div class="market-label">Time Period</div>
+                            <div class="market-value" id="ceTimePeriod">300s</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="ceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- PE Market Data -->
+                <div class="card pe-market-new">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">
+                                <i class="fas fa-arrow-trend-up" style="color: #06b6d4;"></i>
+                                PE Market Data
+                                <span class="real-data-badge">Real LTP</span>
+                                <span class="auto-update-badge" id="ceAutoUpdateBadge">AUTO</span>
+                            </div>
+                            <div class="card-subtitle"><span id="peScripName" style="font-size: 20px;">Loading...</span></div>
+                        </div>
+                    </div>
+                    <div class="market-grid">
+                        <div class="market-item updating">
+                            <div class="market-label">LTP</div>
+                            <div class="market-value" id="peLtp">₹0.00</div>
+                        </div>
+                        <div class="market-item">
+                            <div class="market-label">Range %</div>
+                            <div class="market-value" id="peRange">0.00%</div>
+                        </div>
+                        <div class="market-item">
+                        <div class="market-label">High Price</div>
+                            <div class="market-value" id="peHighPrice">₹0.00</div>
+                        </div>
+                        <div class="market-item">
+                            <div class="market-label">Low Price</div>
+                            <div class="market-value" id="peLowPrice">₹0.00</div>
+                        </div>
+                        <div class="market-item">
+                            <div class="market-label">SMMA 300</div>
+                            <div class="market-value" id="peSmma300">₹0.00</div>
+                        </div>
+                        <div class="market-item">
+                            <div class="market-label">Time Period</div>
+                            <div class="market-value" id="peTimePeriod">300s</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="peChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Alerts Panel -->
+                <div class="card alerts-panel">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-bell"></i>
+                            Live Alerts
+                            <span class="real-data-badge">Real Time</span>
+                        </div>
+                    </div>
+                    <div id="alertsContainer">
+                        <div class="alert-item">
+                            <div class="alert-icon">
+                                <i class="fas fa-info-circle"></i>
+                            </div>
+                            <div class="alert-content">
+                                <div class="alert-title">System Ready</div>
+                                <div class="alert-time">Real data system initialized</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CE Statistics -->
+                <div class="card ce-stats">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-chart-pie"></i>
+                            CE Statistics
+                            <span class="real-data-badge">Live</span>
+                        </div>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Total Trades</span>
+                        <span class="portfolio-value" id="ceStatsTrades">0</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Win Trades</span>
+                        <span class="portfolio-value positive" id="ceStatsWins">0</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Lose Trades</span>
+                        <span class="portfolio-value negative" id="ceStatsLoses">0</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Net P&L</span>
+                        <span class="portfolio-value" id="ceStatsNetPnl">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Unrealized P&L</span>
+                        <span class="portfolio-value" id="ceStatsUnrealizedPnl">₹0.00</span>
+                    </div>
+                </div>
+
+                <!-- PE Statistics -->
+                <div class="card pe-stats">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-chart-pie"></i>
+                            PE Statistics
+                            <span class="real-data-badge">Live</span>
+                        </div>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Total Trades</span>
+                        <span class="portfolio-value" id="peStatsTrades">0</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Win Trades</span>
+                        <span class="portfolio-value positive" id="peStatsWins">0</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Lose Trades</span>
+                        <span class="portfolio-value negative" id="peStatsLoses">0</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Net P&L</span>
+                        <span class="portfolio-value" id="peStatsNetPnl">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Unrealized P&L</span>
+                        <span class="portfolio-value" id="peStatsUnrealizedPnl">₹0.00</span>
+                    </div>
+                </div>
+
+                <!-- Portfolio Panel -->
+                <div class="card portfolio-panel">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-wallet"></i>
+                            Portfolio Summary
+                            <span class="real-data-badge">Real</span>
+                        </div>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Available Balance</span>
+                        <span class="portfolio-value" id="availableBalance">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Used Margin</span>
+                        <span class="portfolio-value" id="usedMargin">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Free Margin</span>
+                        <span class="portfolio-value" id="freeMargin">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Unrealized P&L</span>
+                        <span class="portfolio-value" id="unrealizedPnl">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Realized P&L</span>
+                        <span class="portfolio-value" id="realizedPnl">₹0.00</span>
+                    </div>
+                </div>
+
+                <!-- Orders Panel -->
+                <div class="card orders-panel">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-list"></i>
+                            Recent Orders
+                            <span class="real-data-badge">Real Orders</span>
+                        </div>
+                    </div>
+                    <table class="orders-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Scrip Name</th>
+                                <th>Type</th>
+                                <th>Side</th>
+                                <th>Price</th>
+                                <th>Quantity</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordersTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: #94a3b8;">No real orders yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Section -->
+        <div class="dashboard-content" id="analyticsSection">
+            <div class="analytics-grid">
+                <div class="chart-card">
+                    <div class="card-title">
+                        <i class="fas fa-chart-line"></i>
+                        P&L Chart (Real Trade Data)
+                        <span class="real-data-badge">Live</span>
+                    </div>
+                    <div class="chart-container" style="height: 400px;">
+                        <canvas id="pnlChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="card-title">
+                        <i class="fas fa-chart-pie"></i>
+                        Trade Distribution
+                        <span class="real-data-badge">Real</span>
+                    </div>
+                    <div class="chart-container" style="height: 400px;">
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Performance Metrics -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-trophy"></i>
+                        Performance Metrics (Real Data)
+                    </div>
+                </div>
+                <div class="settings-grid">
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Profit Factor</span>
+                        <span class="portfolio-value" id="profitFactor">0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Max Drawdown</span>
+                        <span class="portfolio-value negative" id="maxDrawdown">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">ROI</span>
+                        <span class="portfolio-value" id="performanceROI">0.00%</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Avg Trade P&L</span>
+                        <span class="portfolio-value" id="avgTradePnl">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Consecutive Wins</span>
+                        <span class="portfolio-value positive" id="consecutiveWins">0</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Consecutive Losses</span>
+                        <span class="portfolio-value negative" id="consecutiveLosses">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Trade History -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-history"></i>
+                        Trade History (Real Trades from API)
+                        <span class="real-data-badge">Live</span>
+                    </div>
+                </div>
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th>Entry Time</th>
+                            <th>Exit Time</th>
+                            <th>Type</th>
+                            <th>Side</th>
+                            <th>Entry Price</th>
+                            <th>Exit Price</th>
+                            <th>Quantity</th>
+                            <th>P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradeHistoryBody">
+                        <tr>
+                            <td colspan="8" style="text-align: center; color: #94a3b8;">No real trades yet</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Portfolio Section -->
+        <div class="dashboard-content" id="portfolioSection">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-wallet"></i>
+                        Detailed Portfolio (Real Data)
+                        <span class="real-data-badge">Live</span>
+                    </div>
+                </div>
+                <div class="settings-grid">
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Total Capital</span>
+                        <span class="portfolio-value" id="totalCapital">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Available Balance</span>
+                        <span class="portfolio-value" id="portfolioAvailableBalance">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Used Margin</span>
+                        <span class="portfolio-value" id="portfolioUsedMargin">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Free Margin</span>
+                        <span class="portfolio-value" id="portfolioFreeMargin">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Margin Utilization</span>
+                        <span class="portfolio-value" id="marginUtilization">0.00%</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Total P&L</span>
+                        <span class="portfolio-value" id="portfolioTotalPnl">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Unrealized P&L</span>
+                        <span class="portfolio-value" id="portfolioUnrealizedPnl">₹0.00</span>
+                    </div>
+                    <div class="portfolio-item">
+                        <span class="portfolio-label">Realized P&L</span>
+                        <span class="portfolio-value" id="portfolioRealizedPnl">₹0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts Section -->
+        <div class="dashboard-content" id="alertsSection">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-bell"></i>
+                        All Real-Time Alerts
+                        <span class="real-data-badge">Live</span>
+                    </div>
+                </div>
+                <div id="allAlertsContainer">
+                    <div class="alert-item">
+                        <div class="alert-icon">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <div class="alert-content">
+                            <div class="alert-title">System Initialized</div>
+                            <div class="alert-time">Real data trading system ready</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Positions Section -->
+        <div class="dashboard-content" id="positionsSection">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-crosshairs"></i>
+                        Current Positions (Real Positions)
+                        <span class="real-data-badge">Live</span>
+                    </div>
+                </div>
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th>Scrip Type</th>
+                            <th>Side</th>
+                            <th>Quantity</th>
+                            <th>Entry Price</th>
+                            <th>Current Price</th>
+                            <th>P&L</th>
+                            <th>Entry Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="positionsTableBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: #94a3b8;">No open positions</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Option Greek Section -->
+        <div class="dashboard-content" id="optiongreek">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-crosshairs"></i>
+                        Option Greek (Real Time Value)
+                        <span class="real-data-badge">Live</span>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="dashboard-content" id="settingsSection">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-cog"></i>
+                        Real Trading Configuration
+                        <span class="real-data-badge">Live Config</span>
+                    </div>
+                </div>
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label class="form-label">CE Scrip Code</label>
+                        <input type="number" class="form-input" id="ceScripCode" placeholder="Enter CE scrip code">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">PE Scrip Code</label>
+                        <input type="number" class="form-input" id="peScripCode" placeholder="Enter PE scrip code">
+                    </div>
+                    <div class="form-group">
+                        <label for="exchange" class="form-label">Exchange:</label>
+                        <select id="exchange" class="form-input">
+                            <option value="N">NSE (National Futures and Options)</option>
+                            <option value="B">BSE (Bombay Stock Exchange Futures and Options)</option>
+                            <option value="M">MCX (Multi Commodity Exchange)</option>
+                        </select>   
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" class="form-input" id="quantity" placeholder="Enter quantity">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Capital</label>
+                        <input type="number" class="form-input" id="capital" placeholder="Enter capital amount">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Stop Loss %</label>
+                        <input type="number" class="form-input" id="stopLossPercent" placeholder="Enter stop loss percentage">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Target Profit %</label>
+                        <input type="number" class="form-input" id="targetProfitPercent" placeholder="Enter target profit percentage">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Trades Per Day</label>
+                        <input type="number" class="form-input" id="maxTradesPerDay" placeholder="Enter max trades per day">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min Range for Trading %</label>
+                        <input type="number" class="form-input" id="minRangeForTrading" placeholder="Enter minimum range percentage">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Trading Start Time</label>
+                        <input type="time" class="form-input" id="tradingStartTime">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Trading End Time</label>
+                        <input type="time" class="form-input" id="tradingEndTime">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Strategy Range %</label>
+                        <input type="number" class="form-input" id="strategy_range" placeholder="Enter strategy range">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Broker</label>
+                        <select class="form-input" id="broker">
+                            <option value="upstox">Upstox</option>
+                            <option value="zerodha">Zerodha</option>
+                            <option value="angel">STOCKO</option>
+                        </select>
+                    </div>
+                    <!-- New Auto Scrip Update Settings -->
+                    <div class="form-group">
+                        <label class="form-label">Auto Scrip Update</label>
+                        <select class="form-input" id="autoScripUpdate">
+                            <option value="enabled">Enabled</option>
+                            <option value="disabled">Disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Price Difference Threshold %</label>
+                        <input type="number" class="form-input" id="priceDifferenceThreshold" placeholder="40" value="40">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="control-btn btn-primary" onclick="saveSettings()">
+                        <i class="fas fa-save"></i>
+                        Save Real Trading Settings
+                    </button>
+                    
+                    <button class="control-btn btn-primary" onclick="openScripSelectionModal()">
+                        Scrip Selection
+                    </button>
+                    </div>
+                <div class="error-message" id="settingsError" style="display: none;"></div>
+            </div>
+        </div>
+        <div class="dashboard-content" id="tradeHistorySection">
+            <div class="card">
+                <div class="card-header">
+                <div class="card-title">
+                    <i class="fas fa-history"></i>
+                    Trade History
+                    <span class="real-data-badge">Live</span>
+                </div>
+                </div>
+                <!-- Trade history table -->
+                 <div style="display:flex; gap:8px; align-items:end; margin:10px 0;">
+                    <label class="form-label">Search Type</label>
+                    <select id="tradeSearchType" class="form-input">
+                        <option value="all">All</option>
+                        <option value="date">Date range</option>
+                        <option value="scrip">Scrip name</option>
+                        <option value="scriptype">Scrip type</option>
+                        <option value="pnl">PnL range</option>
+                    </select>
+
+                    <div id="thDateInputs" style="display:none; gap:8px;">
+                        <label class="form-label">From</label>
+                        <input type="date" id="thFrom" class="form-input">
+                        <label class="form-label">To</label>
+                        <input type="date" id="thTo" class="form-input">
+                    </div>
+
+                    <div id="thScripInputs" style="display:none;">
+                        <input type="text" id="thScripName" class="form-input" placeholder="e.g. NIFTY">
+                    </div>
+
+                    <div id="thTypeInputs" style="display:none;">
+                        <select id="thScripType" class="form-input">
+                        <option value="CE">CE</option>
+                        <option value="PE">PE</option>
+                        </select>
+                    </div>
+
+                    <div id="thPnlInputs" style="display:none; gap:8px;">
+                        <input type="number" id="thPnlMin" step="0.01" class="form-input" placeholder="PnL min">
+                        <input type="number" id="thPnlMax" step="0.01" class="form-input" placeholder="PnL max">
+                    </div>
+
+                    <button class="control-btn btn-primary" onclick="loadTradeHistory()">Search</button>
+                    </div>
+                    <script>
+                    const typeSel = document.getElementById('tradeSearchType');
+                    const show = (id, on) => document.getElementById(id).style.display = on ? 'flex' : 'none';
+                    typeSel.addEventListener('change', () => {
+                        show('thDateInputs', typeSel.value === 'date');
+                        show('thScripInputs', typeSel.value === 'scrip');
+                        show('thTypeInputs', typeSel.value === 'scriptype');
+                        show('thPnlInputs', typeSel.value === 'pnl');
+                    });
+                    </script>
+
+                <table class="orders-table">
+                <thead>
+                    <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Scrip Name</th>
+                    <th>Type</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                    <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody id="tradeHistoryTableBody">
+                    <tr><td colspan="7" style="text-align:center; color: #94a3b8;">No trades yet</td></tr>
+                </tbody>
+                </table>
+            </div>
+            </div>
+    </div>
+
+    <!-- Connection Status Indicator -->
+    <div class="connection-status connection-online" id="connectionStatus">
+        <i class="fas fa-wifi"></i>
+        <span>Online</span>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer"></div>
+
+    <!-- Scrip Selection Modal -->
+<div id="scripSelectionModal" style="display:none; position:fixed; inset:0; z-index:9999;">
+  <div style="position:absolute; inset:0; background:rgba(0,0,0,0.45);" onclick="closeScripSelectionModal()"></div>
+  <div style="position:relative; max-width:860px; margin:5% auto; background:var(--card-bg, #0f1115); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:20px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <h3 style="margin:0;">Scrip Selection</h3>
+      <button class="control-btn" onclick="closeScripSelectionModal()">Close</button>
+    </div>
+
+    <div class="settings-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+      <div>
+        <label class="form-label">Exchange</label>
+        <select id="selExchange" class="form-input" size="3">
+           <!-- will be populated from /api/scrips/exchanges -->
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label">Expiry</label>
+        <select id="selExpiry" class="form-input">
+          <option value="">Select expiry</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label">CE Scrip</label>
+        <select id="selCE" class="form-input" size="10">
+           <!-- options: value=scrip_code, label=Name (Strike) -->
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label">PE Scrip</label>
+        <select id="selPE" class="form-input" size="10">
+           <!-- options: value=scrip_code, label=Name (Strike) -->
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+      <button class="control-btn" onclick="closeScripSelectionModal()">Cancel</button>
+      <button class="control-btn btn-primary" onclick="applySelectedScrips()">Submit</button>
+    </div>
+
+    <div id="scripSelectError" class="error-message" style="display:none; margin-top:10px;"></div>
+  </div>
+</div>
+
+    <script>
+        let tradingActive = false;
+        let updateInterval;
+        let ceChart, peChart, pnlChart, distributionChart;
+        let lastFetchTime = 0;
+        let connectionRetries = 0;
+        const MAX_RETRIES = 3;
+        let currentPositions = { ce: null, pe: null };
+        let autoScripUpdateActive = true;
+        let lastScripUpdateCheck = 0;
+        let scripHistory = { ce: [], pe: [] };
+        let squareOffInProgress = false;
+        let lastCeCode = null;
+        let lastPeCode = null;
+
+        // Initialize Charts
+        function initializeCharts() {
+            const ceCtx = document.getElementById('ceChart').getContext('2d');
+            const peCtx = document.getElementById('peChart').getContext('2d');
+
+            const chartConfig = {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Real Price',
+                        data: [],
+                        borderColor: '#06b6d4',
+                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: { 
+                            display: false,
+                            grid: { display: false }
+                        }
+                    },
+                    elements: {
+                        point: { radius: 0 }
+                    }
+                }
+            };
+
+            ceChart = new Chart(ceCtx, chartConfig);
+            
+            const peChartConfig = JSON.parse(JSON.stringify(chartConfig));
+            peChartConfig.data.datasets[0].borderColor = '#8b5cf6';
+            peChartConfig.data.datasets[0].backgroundColor = 'rgba(139, 92, 246, 0.1)';
+            peChart = new Chart(peCtx, peChartConfig);
+
+
+            // Initialize P&L Chart
+            const pnlCtx = document.getElementById('pnlChart').getContext('2d');
+            pnlChart = new Chart(pnlCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Real Cumulative P&L',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { 
+                            display: true,
+                            labels: { color: '#f1f5f9' }
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            ticks: { color: '#64748b', font: { size: 12 }  },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                        },
+                        y: { 
+                            ticks: { color: '#94a3b8' },
+                            grid: {  color: '#64748b', font: { size: 12 } }
+                        }
+                    }
+                }
+            });
+
+            // Initialize Distribution Chart
+            const distCtx = document.getElementById('distributionChart').getContext('2d');
+            distributionChart = new Chart(distCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['CE Wins', 'CE Losses', 'PE Wins', 'PE Losses'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: [
+                            '#06b6d4',
+                            '#ef4444',
+                            '#8b5cf6',
+                            '#f59e0b'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { 
+                            display: true,
+                            labels: { color: '#f1f5f9' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Toast notification system
+        function showToast(title, message, type = 'info', duration = 5000) {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <div class="toast-header">
+                    <div class="toast-title">${title}</div>
+                    <button class="toast-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
+                </div>
+                <div class="toast-message">${message}</div>
+            `;
+            
+            document.getElementById('toastContainer').appendChild(toast);
+            
+            // Show toast
+            setTimeout(() => toast.classList.add('show'), 100);
+            
+            // Auto hide toast
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.dashboard-content').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Remove active class from all nav items
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Show selected section
+            document.getElementById(sectionName + 'Section').classList.add('active');
+            
+            // Add active class to clicked nav item
+            event.target.closest('.nav-item').classList.add('active');
+            
+            // Update breadcrumb
+            document.getElementById('currentSection').textContent = 
+                sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+
+            // Load trade history when that section is opened
+            if (sectionName === 'tradeHistory') {
+                loadTradeHistory();
+            }
+            console.log('Section changed to:', sectionName); // Debug log
+        }
+
+        function setButtonLoading(buttonId, loading = true) {
+            const button = document.getElementById(buttonId);
+            if (loading) {
+                button.classList.add('btn-loading');
+                button.disabled = true;
+            } else {
+                button.classList.remove('btn-loading');
+                button.disabled = false;
+            }
+        }
+
+        function startTrading() {
+            setButtonLoading('startTradingBtn', true);
+            
+            fetch('/api/start_trading', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        tradingActive = true;
+                        updateTradingStatus();
+                        startDataUpdates();
+                        showToast('Trading Started', 'Real data trading engine is now active', 'success');
+                    } else {
+                        showToast('Start Failed', 'Failed to start trading: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting trading:', error);
+                    showToast('Connection Error', 'Error starting real data trading. Check console for details.', 'error');
+                })
+                .finally(() => {
+                    setButtonLoading('startTradingBtn', false);
+                });
+        }
+
+        function stopTrading() {
+            setButtonLoading('stopTradingBtn', true);
+            
+            fetch('/api/stop_trading', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        tradingActive = false;
+                        updateTradingStatus();
+                        stopDataUpdates();
+                        showToast('Trading Stopped', 'Real data trading engine has been stopped', 'info');
+                    } else {
+                        showToast('Stop Failed', 'Failed to stop trading: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error stopping trading:', error);
+                    showToast('Connection Error', 'Error stopping trading. Check console for details.', 'error');
+                })
+                .finally(() => {
+                    setButtonLoading('stopTradingBtn', false);
+                });
+        }
+
+        // Enhanced Square Off Functions
+        function showSquareOffConfirmation() {
+            // Update position summary in confirmation dialog
+            updatePositionSummaryForConfirmation();
+            document.getElementById('squareOffConfirmation').style.display = 'flex';
+        }
+
+        function hideSquareOffConfirmation() {
+            document.getElementById('squareOffConfirmation').style.display = 'none';
+        }
+
+        function updatePositionSummaryForConfirmation() {
+            const summaryDiv = document.getElementById('positionSummaryForConfirm');
+            let summaryText = '';
+            
+            if (currentPositions.ce || currentPositions.pe) {
+                summaryText = '<strong>Current Positions:</strong><br>';
+                
+                if (currentPositions.ce) {
+                    summaryText += `CE: ${currentPositions.ce.side} ${currentPositions.ce.quantity} @ ₹${currentPositions.ce.entry_price}<br>`;
+                }
+                
+                if (currentPositions.pe) {
+                    summaryText += `PE: ${currentPositions.pe.side} ${currentPositions.pe.quantity} @ ₹${currentPositions.pe.entry_price}<br>`;
+                }
+            } else {
+                summaryText = '<em>No open positions to square off</em>';
+            }
+            
+            summaryDiv.innerHTML = summaryText;
+        }
+
+        // ENHANCED: Modified Square Off with immediate new position opening and stop trading
+        async function confirmSquareOff() {
+            if (squareOffInProgress) {
+                showToast('Square Off In Progress', 'Square off operation already in progress', 'warning');
+                return;
+            }
+
+            squareOffInProgress = true;
+            setButtonLoading('squareOffBtn', true);
+            hideSquareOffConfirmation();
+            
+            try {
+                showToast('Square Off Initiated', 'Squaring off positions and opening new ones...', 'info');
+                
+                // Step 1: Square off all positions and immediately open new ones
+                const response = await fetch('/api/enhanced_square_off', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Enhanced Square Off Complete', data.message, 'success');
+                    
+                    // Step 2: Stop trading after square off
+                    setTimeout(async () => {
+                        try {
+                            const stopResponse = await fetch('/api/stop_trading', { method: 'POST' });
+                            const stopData = await stopResponse.json();
+                            
+                            if (stopData.success) {
+                                tradingActive = false;
+                                updateTradingStatus();
+                                stopDataUpdates();
+                                showToast('Trading Stopped', 'Trading stopped after square off as requested', 'info');
+                            }
+                        } catch (error) {
+                            console.error('Error stopping trading after square off:', error);
+                            showToast('Stop Error', 'Failed to stop trading after square off', 'warning');
+                        }
+                    }, 2000); // Wait 2 seconds before stopping
+                    
+                    // Refresh dashboard data
+                    updateRealPositions();
+                    updateRealPortfolio();
+                    updateRealStatistics();
+                } else {
+                    showToast('Enhanced Square Off Failed', data.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showToast('Connection Error', 'An error occurred during enhanced square off operation.', 'error');
+            } finally {
+                squareOffInProgress = false;
+                setButtonLoading('squareOffBtn', false);
+            }
+        }
+
+        function updateTradingStatus() {
+            const statusElement = document.getElementById('tradingStatus');
+            if (tradingActive) {
+                statusElement.className = 'trading-status status-active';
+                statusElement.innerHTML = '<div class="live-data-dot"></div><span>ACTIVE</span>';
+            } else {
+                statusElement.className = 'trading-status status-inactive';
+                statusElement.innerHTML = '<div class="live-data-dot"></div><span>INACTIVE</span>';
+            }
+        }
+
+        function startDataUpdates() {
+            updateInterval = setInterval(() => {
+                updateRealMarketData();
+                updateRealStatistics();
+                updateRealPortfolio();
+                updateRealAlerts();
+                updateRealOrders();
+                updateRealAnalytics();
+                updateRealPositions();
+                checkAutoScripUpdate();
+            }, 1000);
+        }
+
+        function stopDataUpdates() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+        }
+
+        // NEW: Auto Scrip Update Function
+        function checkAutoScripUpdate() {
+            if (!autoScripUpdateActive) return;
+            
+            const now = Date.now();
+            if (now - lastScripUpdateCheck < 30000) return; // Check every 30 seconds
+            
+            lastScripUpdateCheck = now;
+            
+            fetch('/api/check_scrip_update')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.update_needed) {
+                        document.getElementById('autoScripStatus').textContent = 'AUTO SCRIP: UPDATING';
+                        showToast('Auto Scrip Update', `Updating scrips: CE ${data.old_ce} → ${data.new_ce}, PE ${data.old_pe} → ${data.new_pe}`, 'info');
+                        
+                        // Update scrip displays
+                        document.getElementById('ceScripName').textContent = data.new_ce;
+                        document.getElementById('peScripName').textContent = data.new_pe;
+                        
+                        setTimeout(() => {
+                            document.getElementById('autoScripStatus').textContent = 'AUTO SCRIP: MONITORING';
+                        }, 5000);
+                    } else {
+                        document.getElementById('autoScripStatus').textContent = 'AUTO SCRIP: MONITORING';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking scrip update:', error);
+                    document.getElementById('autoScripStatus').textContent = 'AUTO SCRIP: ERROR';
+                });
+        }
+
+        function indexltpget() {
+            fetch('/api/index_ltp')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('API Response:', data); // Log the full response for debugging
+                    if (data.error) {
+                        console.error('Index LTP Error:', data.error);
+                        document.getElementById('niftyLastRate').textContent = 'API Error';
+                        document.getElementById('sensexLastRate').textContent = 'API Error';
+                        return;
+                    }
+
+                    // Helper function to format numbers or return 'N/A'
+                    const formatNumber = (value, decimals = 2, prefix = '') => 
+                        value !== null && value !== undefined ? `${prefix}${value.toFixed(decimals)}` : 'N/A';
+
+                    // Update Nifty LastRate
+                    const nifty = data.Nifty || {};
+                    const niftyLastRate = nifty.LastRate;
+                    document.getElementById('niftyLastRate').textContent = formatNumber(niftyLastRate, 2);
+                    document.getElementById('niftyChg').textContent = formatNumber(nifty.Chg, 2);
+                    document.getElementById('niftyChgPcnt').textContent = formatNumber(nifty.ChgPcnt, 2, '%'); // Assuming ChgPcnt is the percentage change
+                    console.log('Nifty LastRate set to:', document.getElementById('niftyLastRate').textContent);
+
+                    // Update Sensex LastRate
+                    const sensex = data.Sensex || {};
+                    const sensexLastRate = sensex.LastRate;
+                    document.getElementById('sensexLastRate').textContent = formatNumber(sensexLastRate, 2);
+                    document.getElementById('sensexChg').textContent = formatNumber(sensex.Chg, 2); // Assuming ChgPcnt is the percentage change
+                    document.getElementById('sensexChgPcnt').textContent = formatNumber(sensex.ChgPcnt, 2, '%');
+                    console.log('Sensex LastRate set to:', document.getElementById('sensexLastRate').textContent);
+
+                    // Log if elements are missing
+                    ['niftyLastRate', 'sensexLastRate'].forEach(id => {
+                        if (!document.getElementById(id)) {
+                            console.error(`Element with ID ${id} not found in the DOM`);
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Index LTP Fetch Error:', error);
+                    document.getElementById('niftyLastRate').textContent = 'API Error';
+                    document.getElementById('sensexLastRate').textContent = 'API Error';
+                });
+        }
+
+        // Call the function on page load and every 10 seconds
+        window.onload = function() {
+            indexltpget();
+            setInterval(indexltpget, 10000); // Update every 10 seconds
+        };
+
+        function updatePositionCards() {
+            // Update CE Position Card
+            const ceCard = document.getElementById('cePositionCard');
+            const ceSide = document.getElementById('cePositionSide');
+            const ceEntryPrice = document.getElementById('ceEntryPrice');
+            const ceCurrentPrice = document.getElementById('ceCurrentPrice');
+            const ceQuantity = document.getElementById('ceQuantity');
+            const cePnl = document.getElementById('cePnl');
+
+            if (currentPositions.ce) {
+                ceCard.classList.remove('no-position');
+                ceSide.textContent = currentPositions.ce.side;
+                ceSide.className = `position-side ${currentPositions.ce.side === 'BUY' ? 'side-buy' : 'side-sell'}`;
+                ceEntryPrice.textContent = `₹${currentPositions.ce.entry_price.toFixed(2)}`;
+                ceCurrentPrice.textContent = `₹${currentPositions.ce.current_price.toFixed(2)}`;
+                ceQuantity.textContent = currentPositions.ce.quantity;
+                cePnl.textContent = `₹${currentPositions.ce.pnl.toFixed(2)}`;
+                cePnl.className = `position-detail-value ${currentPositions.ce.pnl >= 0 ? 'positive' : 'negative'}`;
+            } else {
+                ceCard.classList.add('no-position');
+                ceSide.textContent = 'NO POSITION';
+                ceSide.className = 'position-side';
+                ceEntryPrice.textContent = '₹0.00';
+                ceCurrentPrice.textContent = '₹0.00';
+                ceQuantity.textContent = '0';
+                cePnl.textContent = '₹0.00';
+                cePnl.className = 'position-detail-value';
+            }
+
+            // Update PE Position Card
+            const peCard = document.getElementById('pePositionCard');
+            const peSide = document.getElementById('pePositionSide');
+            const peEntryPrice = document.getElementById('peEntryPrice');
+            const peCurrentPrice = document.getElementById('peCurrentPrice');
+            const peQuantity = document.getElementById('peQuantity');
+            const pePnl = document.getElementById('pePnl');
+
+            if (currentPositions.pe) {
+                peCard.classList.remove('no-position');
+                peSide.textContent = currentPositions.pe.side;
+                peSide.className = `position-side ${currentPositions.pe.side === 'BUY' ? 'side-buy' : 'side-sell'}`;
+                peEntryPrice.textContent = `₹${currentPositions.pe.entry_price.toFixed(2)}`;
+                peCurrentPrice.textContent = `₹${currentPositions.pe.current_price.toFixed(2)}`;
+                peQuantity.textContent = currentPositions.pe.quantity;
+                pePnl.textContent = `₹${currentPositions.pe.pnl.toFixed(2)}`;
+                pePnl.className = `position-detail-value ${currentPositions.pe.pnl >= 0 ? 'positive' : 'negative'}`;
+            } else {
+                peCard.classList.add('no-position');
+                peSide.textContent = 'NO POSITION';
+                peSide.className = 'position-side';
+                peEntryPrice.textContent = '₹0.00';
+                peCurrentPrice.textContent = '₹0.00';
+                peQuantity.textContent = '0';
+                pePnl.textContent = '₹0.00';
+                pePnl.className = 'position-detail-value';
+            }
+        }
+
+        function updateRealMarketData() {
+            // Update CE data from real API
+            fetch('/api/market_data/ce')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('CE Market Data Error:', data.error);
+                        document.getElementById('ceLtp').textContent = 'API Error';
+                        return;
+                    }
+                    const ltp = data.ltp || 0;
+                    document.getElementById('ceLtp').textContent = `₹${ltp.toFixed(2)}`;
+                    document.getElementById('ceRange').textContent = `${(data.rangeinpercent || 0).toFixed(2)}%`;
+                    document.getElementById('ceSmma300').textContent = `₹${(data.smma300 || 0).toFixed(2)}`;
+                    document.getElementById('ceTimePeriod').textContent = `${data.time_period || 300}s`;
+                    document.getElementById('quickCePrice').textContent = `₹${ltp.toFixed(2)}`;
+                    
+                    document.getElementById('ceHighPrice').textContent = '₹' + (typeof data.high === 'number' ? data.high : (typeof data.high_300 === 'number' ? data.high_300 : 0)).toFixed(2);
+                    document.getElementById('ceLowPrice').textContent = '₹' + (typeof data.low === 'number' ? data.low : (typeof data.low_300 === 'number' ? data.low_300 : 0)).toFixed(2);
+                    
+                    
+                    
+                    // Update chart with real data
+                    if (ceChart && ltp > 0) {
+                        const now = new Date().toLocaleTimeString();
+                        ceChart.data.labels.push(now);
+                        ceChart.data.datasets[0].data.push(ltp);
+                        if (ceChart.data.labels.length > 50) {
+                            ceChart.data.labels.shift();
+                            ceChart.data.datasets[0].data.shift();
+                        }
+                        ceChart.update('none');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching real CE data:', error);
+                    document.getElementById('ceLtp').textContent = 'Connection Error';
+                });
+
+            // Update PE data from real API
+            fetch('/api/market_data/pe')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('PE Market Data Error:', data.error);
+                        document.getElementById('peLtp').textContent = 'API Error';
+                        return;
+                    }
+                    const ltp = data.ltp || 0;
+                    document.getElementById('peLtp').textContent = `₹${ltp.toFixed(2)}`;
+                    document.getElementById('peRange').textContent = `${(data.rangeinpercent || 0).toFixed(2)}%`;
+                    document.getElementById('peSmma300').textContent = `₹${(data.smma300 || 0).toFixed(2)}`;
+                    document.getElementById('peTimePeriod').textContent = `${data.time_period || 300}s`;
+                    document.getElementById('quickPePrice').textContent = `₹${ltp.toFixed(2)}`;
+
+                    document.getElementById('peHighPrice').textContent = '₹' + (typeof data.high === 'number' ? data.high : (typeof data.high_300 === 'number' ? data.high_300 : 0)).toFixed(2);
+                    document.getElementById('peLowPrice').textContent = '₹' + (typeof data.low === 'number' ? data.low : (typeof data.low_300 === 'number' ? data.low_300 : 0)).toFixed(2);
+                    
+                    // Update chart with real data
+                    if (peChart && ltp > 0) {
+                        const now = new Date().toLocaleTimeString();
+                        peChart.data.labels.push(now);
+                        peChart.data.datasets[0].data.push(ltp);
+                        if (peChart.data.labels.length > 50) {
+                            peChart.data.labels.shift();
+                            peChart.data.datasets[0].data.shift();
+                        }
+                        peChart.update('none');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching real PE data:', error);
+                    document.getElementById('peLtp').textContent = 'Connection Error';
+                });
+        }
+
+        function updateRealStatistics() {
+            // Update CE stats
+            fetch('/api/trading_stats/ce')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('ceStatsTrades').textContent = data.total_trades || '0';
+                    document.getElementById('ceStatsWins').textContent = data.win_trades || '0';
+                    document.getElementById('ceStatsLoses').textContent = data.lose_trades || '0';
+                    // Removed the high/low price updates here as they are already handled in updateRealMarketData
+                    const netPnl = data.net_profit || 0;
+                    document.getElementById('ceStatsNetPnl').textContent = `₹${netPnl.toFixed(2)}`;
+                    document.getElementById('ceStatsNetPnl').className = `portfolio-value ${netPnl >= 0 ? 'positive' : 'negative'}`;
+                    document.getElementById('ceStatsUnrealizedPnl').textContent = `₹${(data.unrealized_pnl || 0).toFixed(2)}`;
+                    document.getElementById('ceStatsUnrealizedPnl').className = `portfolio-value ${(data.unrealized_pnl || 0) >= 0 ? 'positive' : 'negative'}`;
+                })
+                .catch(error => console.error('Error fetching real CE stats:', error));
+
+            // Update PE stats
+            fetch('/api/trading_stats/pe')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('peStatsTrades').textContent = data.total_trades || '0';
+                    document.getElementById('peStatsWins').textContent = data.win_trades || '0';
+                    document.getElementById('peStatsLoses').textContent = data.lose_trades || '0';
+                    // Removed the high/low price updates here as they are already handled in updateRealMarketData
+                    const netPnl = data.net_profit || 0;
+                    document.getElementById('peStatsNetPnl').textContent = `₹${netPnl.toFixed(2)}`;
+                    document.getElementById('peStatsNetPnl').className = `portfolio-value ${netPnl >= 0 ? 'positive' : 'negative'}`;
+                    document.getElementById('peStatsUnrealizedPnl').textContent = `₹${(data.unrealized_pnl || 0).toFixed(2)}`;
+                    document.getElementById('peStatsUnrealizedPnl').className = `portfolio-value ${(data.unrealized_pnl || 0) >= 0 ? 'positive' : 'negative'}`;
+                })
+                .catch(error => console.error('Error fetching real PE stats:', error));
+
+            // Update overview stats
+             fetch('/api/trading_stats/combined')
+                .then(response => response.json())
+                .then(data => {
+                    const netPnl = data.net_profit || 0;
+                    document.getElementById('totalPnl').textContent = `₹${netPnl.toFixed(2)}`;
+                    document.getElementById('totalTrades').textContent = data.total_trades || '0';
+                    document.getElementById('winRate').textContent = data.win_ratio || '0%';
+                    document.getElementById('quickPnl').textContent = `₹${netPnl.toFixed(2)}`;
+                    document.getElementById('quickPnl').className = netPnl >= 0 ? 'positive' : 'negative';
+                    
+                    // Update P&L change indicator
+                    const pnlChangeElement = document.getElementById('pnlChange');
+                    if (pnlChangeElement) {
+                        pnlChangeElement.textContent = netPnl >= 0 ? 'Profit' : 'Loss';
+                        pnlChangeElement.className = `metric-change ${netPnl >= 0 ? 'positive' : 'negative'}`;
+                    }
+                })
+                .catch(error => console.error('Error fetching real combined stats:', error));
+        }
+
+        function updateRealPortfolio() {
+            fetch('/api/portfolio')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Real Portfolio Error:', data.error);
+                        return;
+                    }
+                    
+                    // Update main portfolio display
+                    document.getElementById('availableBalance').textContent = `₹${(data.available_balance || 0).toFixed(2)}`;
+                    document.getElementById('usedMargin').textContent = `₹${(data.used_margin || 0).toFixed(2)}`;
+                    document.getElementById('freeMargin').textContent = `₹${(data.free_margin || 0).toFixed(2)}`;
+                    
+                    const unrealizedPnl = data.unrealized_pnl || 0;
+                    const realizedPnl = data.realized_pnl || 0;
+                    
+                    document.getElementById('unrealizedPnl').textContent = `₹${unrealizedPnl.toFixed(2)}`;
+                    document.getElementById('unrealizedPnl').className = `portfolio-value ${unrealizedPnl >= 0 ? 'positive' : 'negative'}`;
+                    
+                    document.getElementById('realizedPnl').textContent = `₹${realizedPnl.toFixed(2)}`;
+                    document.getElementById('realizedPnl').className = `portfolio-value ${realizedPnl >= 0 ? 'positive' : 'negative'}`;
+                    
+                    // Portfolio section
+                    document.getElementById('totalCapital').textContent = `₹${(data.available_balance || 0).toFixed(2)}`;
+                    document.getElementById('portfolioAvailableBalance').textContent = `₹${(data.available_balance || 0).toFixed(2)}`;
+                    document.getElementById('portfolioUsedMargin').textContent = `₹${(data.used_margin || 0).toFixed(2)}`;  
+                    document.getElementById('portfolioFreeMargin').textContent = `₹${(data.free_margin || 0).toFixed(2)}`;
+                    document.getElementById('marginUtilization').textContent = `${(data.margin_utilization || 0).toFixed(2)}%`;
+                    
+                    const totalPnl = data.total_pnl || 0;
+                    document.getElementById('portfolioTotalPnl').textContent = `₹${totalPnl.toFixed(2)}`;
+                    document.getElementById('portfolioTotalPnl').className = `portfolio-value ${totalPnl >= 0 ? 'positive' : 'negative'}`;
+                    
+                    document.getElementById('portfolioUnrealizedPnl').textContent = `₹${unrealizedPnl.toFixed(2)}`;
+                    document.getElementById('portfolioUnrealizedPnl').className = `portfolio-value ${unrealizedPnl >= 0 ? 'positive' : 'negative'}`;
+                    
+                    document.getElementById('portfolioRealizedPnl').textContent = `₹${realizedPnl.toFixed(2)}`;
+                    document.getElementById('portfolioRealizedPnl').className = `portfolio-value ${realizedPnl >= 0 ? 'positive' : 'negative'}`;
+                    
+                    // Update position count
+                    const positionCount = (data.positions || []).length;
+                    document.getElementById('activePositions').textContent = positionCount;
+                    
+                    // Update current positions for position cards
+                    currentPositions.ce = null;
+                    currentPositions.pe = null;
+                    
+                    if (data.positions) {
+                        data.positions.forEach(position => {
+                            if (position.scrip_type === 'CE') {
+                                currentPositions.ce = position;
+                            } else if (position.scrip_type === 'PE') {
+                                currentPositions.pe = position;
+                            }
+                        });
+                    }
+                    
+                    // Update position cards
+                    updatePositionCards();
+                })
+                .catch(error => console.error('Error fetching real portfolio:', error));
+        }
+
+        function updateRealAlerts() {
+            fetch('/api/alerts')
+                .then(response => response.json())
+                .then(data => {
+                    const alertsContainer = document.getElementById('alertsContainer');
+                    
+                    if (data.alerts && data.alerts.length > 0) {
+                        const alertsHtml = data.alerts.slice(0, 3).map(alert => `
+                            <div class="alert-item ${alert.severity || 'info'}">
+                                <div class="alert-icon ${alert.severity || 'info'}">
+                                    <i class="fas fa-${getAlertIcon(alert.type)}"></i>
+                                </div>
+                                <div class="alert-content">
+                                    <div class="alert-title">${alert.title}</div>
+                                    <div class="alert-time">${formatTime(alert.timestamp)}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                        
+                        alertsContainer.innerHTML = alertsHtml;
+                    }
+                })
+                .catch(error => console.error('Error fetching real alerts:', error));
+
+            // Update all alerts section
+            fetch('/api/alerts/all')
+                .then(response => response.json())
+                .then(data => {
+                    const allAlertsContainer = document.getElementById('allAlertsContainer');
+                    
+                    if (data.alerts && data.alerts.length > 0) {
+                        const allAlertsHtml = data.alerts.map(alert => `
+                            <div class="alert-item ${alert.severity || 'info'}">
+                                <div class="alert-icon ${alert.severity || 'info'}">
+                                    <i class="fas fa-${getAlertIcon(alert.type)}"></i>
+                                </div>
+                                <div class="alert-content">
+                                    <div class="alert-title">${alert.title}</div>
+                                    <div class="alert-time">${alert.message} - ${formatTime(alert.timestamp)}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                        
+                        allAlertsContainer.innerHTML = allAlertsHtml;
+                    }
+                })
+                .catch(error => console.error('Error fetching all real alerts:', error));
+        }
+
+        function updateRealOrders() {
+            fetch('/api/orders/combined')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('ordersTableBody');
+                    if (data.orders && data.orders.length > 0) {
+                        tbody.innerHTML = data.orders.slice(0, 10).map(order => `
+                            <tr>
+                                <td>${formatTime(order.timestamp)}</td>
+                                <td>${order.scrip_name || 'N/A'}</td>
+                                <td><span class="type-badge type-${order.scrip_type?.toLowerCase() || 'ce'}">${order.scrip_type || 'CE'}</span></td>
+                                <td><span class="${order.side === 'BUY' ? 'positive' : 'negative'}">${order.side}</span></td>
+                                <td>₹${order.price}</td>
+                                <td>${order.quantity}</td>
+                                <td><span class="status-badge status-${order.status?.toLowerCase() || 'executed'}">${order.status || 'EXECUTED'}</span></td>
+                            </tr>
+                        `).join('');
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8;">No real orders yet</td></tr>';
+                    }
+                })
+                .catch(error => console.error('Error fetching real orders:', error));
+        }
+
+
+        function updateRealAnalytics() {
+            // Update P&L Chart with real data
+            fetch('/api/analytics/pnl_chart')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.chart_data && pnlChart) {
+                        const labels = data.chart_data.map(item => formatTime(item.time));
+                        const pnlData = data.chart_data.map(item => item.cumulative_pnl);
+                        
+                        pnlChart.data.labels = labels;
+                        pnlChart.data.datasets[0].data = pnlData;
+                        pnlChart.update();
+                    }
+                })
+                .catch(error => console.error('Error fetching real P&L chart:', error));
+
+            // Update Distribution Chart with real data
+            fetch('/api/analytics/trade_distribution')
+                .then(response => response.json())
+                .then(data => {
+                    if (distributionChart) {
+                        distributionChart.data.datasets[0].data = [
+                            data.ce_wins || 0,
+                            data.ce_losses || 0,
+                            data.pe_wins || 0,
+                            data.pe_losses || 0
+                        ];
+                        distributionChart.update();
+                    }
+                })
+                .catch(error => console.error('Error fetching real distribution chart:', error));
+
+            // Update Performance Metrics with real data
+            fetch('/api/analytics/performance_metrics')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('profitFactor').textContent = (data.profit_factor || 0).toFixed(2);
+                    document.getElementById('maxDrawdown').textContent = `₹${(data.max_drawdown || 0).toFixed(2)}`;
+                    document.getElementById('performanceROI').textContent = `${(data.roi || 0).toFixed(2)}%`;
+                    document.getElementById('avgTradePnl').textContent = `₹${(data.avg_trade_pnl || 0).toFixed(2)}`;
+                    document.getElementById('consecutiveWins').textContent = data.max_consecutive_wins || '0';
+                    document.getElementById('consecutiveLosses').textContent = data.max_consecutive_losses || '0';
+                })
+                .catch(error => console.error('Error fetching real performance metrics:', error));
+
+            // Update Trade History with real data
+            fetch('/api/trades/combined')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('tradeHistoryBody');
+                    if (data.trades && data.trades.length > 0) {
+                        tbody.innerHTML = data.trades.map(trade => `
+                            <tr>
+                                <td>${formatTime(trade.entry_time)}</td>
+                                <td>${formatTime(trade.exit_time)}</td>
+                                <td><span class="type-badge type-${trade.scrip_type?.toLowerCase() || 'ce'}">${trade.scrip_type || 'CE'}</span></td>
+                                <td><span class="${trade.side === 'BUY' ? 'positive' : 'negative'}">${trade.side}</span></td>
+                                <td>₹${trade.entry_price}</td>
+                                <td>₹${trade.exit_price}</td>
+                                <td>${trade.quantity}</td>
+                                <td><span class="${trade.pnl >= 0 ? 'positive' : 'negative'}">₹${trade.pnl}</span></td>
+                            </tr>
+                        `).join('');
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #94a3b8;">No real trades yet</td></tr>';
+                    }
+                })
+                .catch(error => console.error('Error fetching real trade history:', error));
+        }
+
+        function updateRealPositions() {
+            fetch('/api/positions/current')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('positionsTableBody');
+                    if (data.positions && data.positions.length > 0) {
+                        tbody.innerHTML = data.positions.map(position => `
+                            <tr>
+                                <td><span class="type-badge type-${position.scrip_type?.toLowerCase() || 'ce'}">${position.scrip_type || 'CE'}</span></td>
+                                <td><span class="${position.side === 'BUY' ? 'positive' : 'negative'}">${position.side}</span></td>
+                                <td>${position.quantity}</td>
+                                <td>₹${position.entry_price}</td>
+                                <td>₹${position.current_price}</td>
+                                <td><span class="${position.pnl >= 0 ? 'positive' : 'negative'}">₹${position.pnl.toFixed(2)}</span></td>
+                                <td>${formatTime(position.entry_time)}</td>
+                            </tr>
+                        `).join('');
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">No open positions</td></tr>';
+                    }
+                })
+                .catch(error => console.error('Error fetching real positions:', error));
+        }
+
+        function loadSettings() {
+            fetch('/api/config')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('ceScripCode').value = data.ce_scrip_code || '';
+                    document.getElementById('peScripCode').value = data.pe_scrip_code || '';
+                    document.getElementById('exchange').value = data.exchange || 'N';
+                    document.getElementById('quantity').value = data.quantity || '';
+                    document.getElementById('capital').value = data.capital || '';
+                    document.getElementById('stopLossPercent').value = data.stop_loss_percent || '';
+                    document.getElementById('targetProfitPercent').value = data.target_profit_percent || '';
+                    document.getElementById('maxTradesPerDay').value = data.max_trades_per_day || '';
+                    document.getElementById('minRangeForTrading').value = data.min_range_for_trading || '';
+                    document.getElementById('tradingStartTime').value = data.trading_start_time || '';
+                    document.getElementById('tradingEndTime').value = data.trading_end_time || '';
+                    document.getElementById('broker').value = data.broker || 'upstox';
+                    document.getElementById('strategy_range').value = data.strategy_range;
+                    document.getElementById('autoScripUpdate').value = data.auto_scrip_update || 'enabled';
+                    document.getElementById('priceDifferenceThreshold').value = data.price_difference_threshold || '40';
+                    
+                    autoScripUpdateActive = data.auto_scrip_update === 'enabled';
+                })
+                .catch(error => {
+                    console.error('Error loading real settings:', error);
+                    document.getElementById('settingsError').textContent = 'Error loading settings: ' + error.message;
+                    document.getElementById('settingsError').style.display = 'block';
+                });
+        }
+
+        
+        async function saveSettings() {
+            // Collect settings
+            const settings = {
+                // Collect these as strings to avoid issues with non-numeric codes
+                ce_scrip_code: document.getElementById('ceScripCode').value,
+                pe_scrip_code: document.getElementById('peScripCode').value,
+                exchange: document.getElementById('exchange').value,
+                quantity: parseInt(document.getElementById('quantity').value),
+                capital: parseFloat(document.getElementById('capital').value),
+                stop_loss_percent: parseFloat(document.getElementById('stopLossPercent').value),
+                target_profit_percent: parseFloat(document.getElementById('targetProfitPercent').value),
+                max_trades_per_day: parseInt(document.getElementById('maxTradesPerDay').value),
+                min_range_for_trading: parseFloat(document.getElementById('minRangeForTrading').value),
+                trading_start_time: document.getElementById('tradingStartTime').value,
+                trading_end_time: document.getElementById('tradingEndTime').value,
+                strategy_range: parseFloat(document.getElementById('strategy_range').value),
+                broker: document.getElementById('broker').value,
+                auto_scrip_update: document.getElementById('autoScripUpdate').value,
+                price_difference_threshold: parseFloat(document.getElementById('priceDifferenceThreshold').value)
+            };
+
+            // The frontend should not provide the scrip names.
+            // The backend will handle fetching the correct names.
+
+            const hasPosition = currentPositions.ce || currentPositions.pe;
+
+            if (hasPosition) {
+                showToast('Squaring Off', 'Open positions detected. Squaring off first...', 'warning');
+
+                try {
+                    const squareOffRes = await fetch('/api/enhanced_square_off', {
+                        method: 'POST'
+                    });
+
+                    const squareOffResult = await squareOffRes.json();
+
+                    if (!squareOffResult.success) {
+                        showToast('Square Off Failed', squareOffResult.message || 'Failed to square off.', 'error');
+                        return;
+                    }
+
+                    showToast('Square Off Done', 'Positions squared off successfully.', 'success');
+                    await new Promise(res => setTimeout(res, 1000)); // slight delay to complete square-off
+                } catch (err) {
+                    console.error('Square off error:', err);
+                    showToast('Error', 'Error while squaring off.', 'error');
+                    return;
+                }
+            }
+
+            // Save config
+            try {
+                const configRes = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+
+                const configResult = await configRes.json();
+
+                if (!configResult.success) {
+                    showToast('Save Failed', configResult.message || 'Could not save settings.', 'error');
+                    return;
+                }
+
+                showToast('Settings Saved', 'New settings applied successfully. Scrip names updated automatically.', 'success');
+                
+                // After a successful save, refresh the UI to show the new names
+                // You'll need a function like this to re-fetch and render the config.
+                // For example:
+                fetchAndRenderConfig();
+
+            } catch (err) {
+                console.error('Config Save Error:', err);
+                showToast('Error', 'Failed to save settings.', 'error');
+                return;
+            }
+        }
+
+                // A helper function to fetch the latest config and update the UI
+        async function fetchAndRenderConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+
+                // Update the input fields with the scrip codes
+                document.getElementById('ceScripCode').value = config.ce_scrip_code || '';
+                document.getElementById('peScripCode').value = config.pe_scrip_code || '';
+
+                // *** THIS IS THE CHANGE ***
+                // Display the scrip code in the element meant for the name
+                document.getElementById('ceScripName').textContent = config.ce_scrip_name || config.ce_scrip_code || 'N/A';
+                document.getElementById('peScripName').textContent = config.pe_scrip_name || config.pe_scrip_code || 'N/A';
+                // *************************
+
+                // Now update the rest of your settings
+                document.getElementById('quantity').value = config.quantity || 0;
+                document.getElementById('capital').value = config.capital || 0;
+                document.getElementById('stopLossPercent').value = config.stop_loss_percent || 0;
+                document.getElementById('targetProfitPercent').value = config.target_profit_percent || 0;
+                document.getElementById('maxTradesPerDay').value = config.max_trades_per_day || 0;
+                document.getElementById('minRangeForTrading').value = config.min_range_for_trading || 0;
+                document.getElementById('tradingStartTime').value = config.trading_start_time || '';
+                document.getElementById('tradingEndTime').value = config.trading_end_time || '';
+                document.getElementById('strategy_range').value = config.strategy_range || 0;
+                document.getElementById('broker').value = config.broker || '';
+                document.getElementById('exchange').value = config.exchange || '';
+                document.getElementById('autoScripUpdate').value = config.auto_scrip_update || 'disabled';
+                document.getElementById('priceDifferenceThreshold').value = config.price_difference_threshold || 0;
+
+            } catch (error) {
+                console.error('Failed to fetch and render config:', error);
+            }
+        }
+
+        // Call the function to load and render the config when the page loads
+        fetchAndRenderConfig();
+
+
+
+        function getAlertIcon(type) {
+            const icons = {
+                'trade': 'exchange-alt',
+                'volatility': 'exclamation-triangle',
+                'stop_loss': 'times-circle',
+                'target': 'check-circle',
+                'system': 'cog',
+                'config': 'wrench',
+                'error': 'exclamation-circle',
+                'limit': 'ban',
+                'success': 'check-circle',
+                'info': 'info-circle',
+                'scrip_update': 'sync-alt'
+            };
+            return icons[type] || 'info-circle';
+        }
+
+        function formatTime(timestamp) {
+            return new Date(timestamp).toLocaleString();
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            loadSettings();
+            updateRealMarketData();
+            updateRealStatistics();
+            updateRealPortfolio();
+            updateRealAlerts();
+            updateRealOrders();
+            updateRealAnalytics();
+            updateRealPositions();
+            
+            // Start periodic updates for real data (every 2 seconds)
+            setInterval(() => {
+                updateRealMarketData();
+                updateRealPortfolio();
+                updateRealAlerts();
+                checkAutoScripUpdate();
+                if (!tradingActive) {
+                    updateRealStatistics();
+                    updateRealPositions();
+                }
+            }, 2000);
+
+            // Close confirmation dialog when clicking outside
+            document.getElementById('squareOffConfirmation').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    hideSquareOffConfirmation();
+                }
+            });
+        });
+</script>
+<script>
+         document.addEventListener('DOMContentLoaded', function () {
+            const btn = document.getElementById('tradeHistorySearchBtn');
+            if (btn) btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            loadTradeHistory();
+            });
+        });
+        document.addEventListener('DOMContentLoaded', function () {
+            function updateScripNames() {
+                fetch('/api/config')
+                    .then(res => res.json())
+                    .then(config => {
+                        if (config.ce_scrip_name) {
+                            document.getElementById('ceScripName').textContent = config.ce_scrip_name;
+                        }
+                        if (config.pe_scrip_name) {
+                            document.getElementById('peScripName').textContent = config.pe_scrip_name;
+                        }
+                    })
+                    .catch(error => console.error("Failed to fetch scrip names:", error));
+            }
+
+            updateScripNames(); // Initial
+            setInterval(updateScripNames, 3000); // Refresh every 3s
+        });
+    </script>
+<script>
+function qs(id) { return document.getElementById(id); }
+
+async function openScripSelectionModal() {
+  try {
+    // Prefill exchange from current settings UI if available
+    const currentExch = (qs('exchange')?.value || '').trim();
+    await populateExchanges(currentExch || null);
+    await populateExpiries(qs('selExchange').value || currentExch || null);
+    await populateScripLists(qs('selExchange').value, qs('selExpiry').value);
+
+    qs('scripSelectionModal').style.display = 'block';
+  } catch (e) {
+    console.error('Open modal error', e);
+    showScripSelectError('Failed to open Scrip Selection. Please try again.');
+  }
+}
+
+function closeScripSelectionModal() {
+  qs('scripSelectionModal').style.display = 'none';
+  clearScripSelectError();
+}
+
+function showScripSelectError(msg) {
+  const el = qs('scripSelectError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function clearScripSelectError() {
+  const el = qs('scripSelectError');
+  el.textContent = '';
+  el.style.display = 'none';
+}
+
+async function populateExchanges(prefillCode) {
+  clearScripSelectError();
+  const sel = qs('selExchange');
+  sel.innerHTML = '';
+  try {
+    const res = await fetch('/api/scrips/exchanges');
+    const data = await res.json();
+    (data.exchanges || []).forEach(x => {
+      const opt = document.createElement('option');
+      opt.value = x.code;
+      opt.textContent = `${x.name} (${x.code})`;
+      sel.appendChild(opt);
+    });
+    if (prefillCode) {
+      sel.value = prefillCode;
+    }
+  } catch (e) {
+    console.error('populateExchanges error', e);
+    showScripSelectError('Failed to load exchanges.');
+  }
+}
+
+
+  function buildTradeHistoryUrl() {
+    const base = new URL('api/trade-history', window.location.origin);
+    const t = document.getElementById('tradeSearchType').value;
+
+    if (t === 'date') {
+      const from = document.getElementById('thFrom').value;
+      const to = document.getElementById('thTo').value;
+      if (from) base.searchParams.set('fromdate', from);
+      if (to)   base.searchParams.set('todate', to);
+    } else if (t === 'scrip') {
+      const s = document.getElementById('thScripName').value.trim();
+      if (s) base.searchParams.set('scripname', s);
+    } else if (t === 'scriptype') {
+      const st = document.getElementById('thScripType').value;
+      if (st) base.searchParams.set('scriptype', st);
+    } else if (t === 'pnl') {
+      const mn = document.getElementById('thPnlMin').value;
+      const mx = document.getElementById('thPnlMax').value;
+      if (mn) base.searchParams.set('pnlmin', mn);
+      if (mx) base.searchParams.set('pnlmax', mx);
+    }
+    return base.toString();
+  }
+
+  async function loadTradeHistory() {
+    try {
+      const url = buildTradeHistoryUrl();
+      const res = await fetch(url);
+      const result = await res.json();
+
+      const tbody = document.getElementById('tradeHistoryTableBody');
+      tbody.innerHTML = '';
+
+      if (result.data && result.data.length) {
+        result.data.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${row['Date'] || ''}</td>
+            <td>${row['Time'] || ''}</td>
+            <td>${row['Scrip Name'] || ''}</td>
+            <td>${row['Scrip Type'] || ''}</td>
+            <td>${row['Quantity'] ?? ''}</td>
+            <td>${row['Price'] ?? ''}</td>
+            <td>${row['Value'] ?? ''}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } else {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8">No trades found</td></tr>`;
+      }
+    } catch (e) {
+      console.error('Trade history fetch error', e);
+    }
+  }
+
+  // Optional: auto-load when the Trade History tab is shown
+  document.querySelector('[onclick="showSection(\'tradeHistory\')"]').addEventListener('click', loadTradeHistory);
+
+
+  
+async function populateExpiries(exch) {
+  clearScripSelectError();
+  const sel = qs('selExpiry');
+  sel.innerHTML = '';
+  try {
+    const url = new URL('/api/scrips/expiries', window.location.origin);
+    if (exch) url.searchParams.set('exch', exch);
+    const res = await fetch(url);
+    const data = await res.json();
+    const expiries = data.expiries || [];
+    if (expiries.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No expiries found';
+      sel.appendChild(opt);
+    } else {
+      expiries.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        sel.appendChild(opt);
+      });
+      // default to first expiry
+      sel.value = expiries[0];
+    }
+  } catch (e) {
+    console.error('populateExpiries error', e);
+    showScripSelectError('Failed to load expiries.');
+  }
+}
+
+async function populateScripLists(exch, expiry) {
+  clearScripSelectError();
+  const selCE = qs('selCE');
+  const selPE = qs('selPE');
+  selCE.innerHTML = '';
+  selPE.innerHTML = '';
+
+  if (!exch || !expiry) return;
+
+  try {
+    const url = new URL('/api/scrips/list', window.location.origin);
+    url.searchParams.set('exch', exch);
+    url.searchParams.set('expiry', expiry);
+    const res = await fetch(url);
+    const data = await res.json();
+
+    (data.ce || []).forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.scrip_code;
+      const strike = (item.strike != null) ? ` (${item.strike})` : '';
+      opt.textContent = `${item.name}${strike}`;
+      selCE.appendChild(opt);
+    });
+
+    (data.pe || []).forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.scrip_code;
+      const strike = (item.strike != null) ? ` (${item.strike})` : '';
+      opt.textContent = `${item.name}${strike}`;
+      selPE.appendChild(opt);
+    });
+
+    // Try to preselect existing codes from settings if visible
+    const currentCE = qs('ceScripCode')?.value;
+    const currentPE = qs('peScripCode')?.value;
+    if (currentCE) selCE.value = currentCE;
+    if (currentPE) selPE.value = currentPE;
+  } catch (e) {
+    console.error('populateScripLists error', e);
+    showScripSelectError('Failed to load CE/PE scrips.');
+  }
+}
+
+// Event bindings inside modal
+document.addEventListener('change', async (ev) => {
+  if (ev.target?.id === 'selExchange') {
+    await populateExpiries(ev.target.value);
+    await populateScripLists(ev.target.value, qs('selExpiry').value);
+  } else if (ev.target?.id === 'selExpiry') {
+    await populateScripLists(qs('selExchange').value, ev.target.value);
+  }
+});
+
+function applySelectedScrips() {
+  try {
+    const exch = qs('selExchange').value;
+    const ceCode = qs('selCE').value;
+    const peCode = qs('selPE').value;
+
+    if (!exch || !ceCode || !peCode) {
+      showScripSelectError('Please select Exchange, CE, and PE.');
+      return;
+    }
+
+    // Fill into Settings inputs; user will click "Save Real Trading Settings"
+    if (qs('exchange')) qs('exchange').value = exch;
+    if (qs('ceScripCode')) qs('ceScripCode').value = ceCode;
+    if (qs('peScripCode')) qs('peScripCode').value = peCode;
+
+    closeScripSelectionModal();
+    showToast('Scrips Selected', 'CE/PE codes and exchange populated into Settings. Click Save Real Trading Settings to apply.', 'success');
+  } catch (e) {
+    console.error('applySelectedScrips error', e);
+    showScripSelectError('Failed to apply selected scrips.');
+  }
+}
+</script>
+</body>
+</html>

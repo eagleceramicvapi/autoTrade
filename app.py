@@ -17,6 +17,7 @@ from pathlib import Path
 from requests_oauthlib import OAuth2Session
 from urllib.parse import urlparse, parse_qs
 import pyotp
+import pyperclip
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,6 +47,10 @@ alerts = []
 squared_off = False
 ce_stop = "No"
 pe_stop = "No"
+
+# Authentication data
+current_totp_code = None
+auth_completed = False
 
 # Scrip update control variables
 scrip_update_in_progress = False
@@ -491,6 +496,9 @@ def generate_totp():
         if secret:
             totp = pyotp.TOTP(secret)
             current_totp = totp.now()
+            # Store TOTP in a global variable for frontend access
+            global current_totp_code
+            current_totp_code = current_totp
             print(f"Generated TOTP: {current_totp}")
             return current_totp
         else:
@@ -567,6 +575,9 @@ class OAuth2Server:
 
                 server_instance.access_token = token_data['access_token']
                 server_instance.auth_successful = True
+                # Set global auth completion flag
+                global auth_completed
+                auth_completed = True
                 logger.debug(f"Access Token: {server_instance.access_token}")
 
                 # Save token to file for persistence
@@ -654,26 +665,13 @@ def get_access_token():
         print(f'Opening authorization URL in browser: {auth_url}\n')
         webbrowser.open(auth_url)
 
-        # Wait a reasonable time for the authentication to complete
-        max_wait_time = 60  # Wait up to 60 seconds
-        start_time = time.time()
-        while not server.is_auth_successful() and (time.time() - start_time) < max_wait_time:
-            time.sleep(1)
-
-        if server.is_auth_successful():
-            print("\nAccess Token obtained successfully!")
-            print(f"Access Token: {server.fetch_access_token()}")
-            return {
-                'success': True,
-                'message': 'Authentication successful! Token saved automatically.',
-                'access_token': server.fetch_access_token()
-            }
-        else:
-            print("\nFailed to obtain access token within time limit.")
-            return {
-                'success': False,
-                'message': 'Authentication timed out. Please try again.'
-            }
+        # Return immediately with TOTP code for frontend display
+        return {
+            'success': True,
+            'message': 'TOTP generated successfully. Please enter it in the authentication site.',
+            'totp_code': totp_code,
+            'auth_pending': True
+        }
 
     except Exception as e:
         logger.error(f"Error in get_access_token: {str(e)}")
@@ -681,6 +679,25 @@ def get_access_token():
             'success': False,
             'message': f'Error: {str(e)}'
         }
+
+
+@app.route('/api/check_auth_status', methods=['GET'])
+def check_auth_status():
+    """API endpoint to check authentication status"""
+    global auth_completed, current_totp_code
+    return jsonify({
+        'auth_completed': auth_completed,
+        'totp_code': current_totp_code
+    })
+
+
+@app.route('/api/reset_auth', methods=['POST'])
+def reset_auth():
+    """API endpoint to reset authentication status"""
+    global auth_completed, current_totp_code
+    auth_completed = False
+    current_totp_code = None
+    return jsonify({'success': True, 'message': 'Authentication status reset'})
 
 
 def refresh_access_token(authorization_code):
@@ -1134,7 +1151,7 @@ def update_scrip_codes_immediately():
         old_ce_ltp = get_ltp(config.get('ce_scrip_code')) if config.get('ce_scrip_code') else 0
         old_pe_ltp = get_ltp(config.get('pe_scrip_code')) if config.get('pe_scrip_code') else 0
 
-        logger.info(f"Old LTPs - CE: ₹{old_ce_ltp}, PE: ₹{old_pe_ltp}")
+        logger.info(f"Old LTPs - CE: Rs.{old_ce_ltp}, PE: Rs.{old_pe_ltp}")
 
         best_ce_scrip, best_pe_scrip, ce_scrip_name, pe_scrip_name = find_nearest_150_scrips()
 
@@ -1142,7 +1159,7 @@ def update_scrip_codes_immediately():
             logger.error("Could not find suitable new scrips")
             return False
 
-        logger.info(f"New LTPs - CE: ₹{best_ce_scrip['ltp']}, PE: ₹{best_pe_scrip['ltp']}")
+        logger.info(f"New LTPs - CE: Rs.{best_ce_scrip['ltp']}, PE: Rs.{best_pe_scrip['ltp']}")
 
         old_ce_code = config.get('ce_scrip_code', '')
         old_pe_code = config.get('pe_scrip_code', '')
@@ -1491,7 +1508,7 @@ class TradingEngine:
             num_lots = max(1, round(base_qty / lot_size))
             qty = num_lots * lot_size
             
-            logger.info(f"[{scrip_type}] Auto-calculated Qty: {qty} ({num_lots} lots × {lot_size}) | LTP: ₹{ltp:.2f} | Allocated Capital: ₹{allocated_capital:,.2f}")
+            logger.info(f"[{scrip_type}] Auto-calculated Qty: {qty} ({num_lots} lots × {lot_size}) | LTP: Rs.{ltp:.2f} | Allocated Capital: Rs.{allocated_capital:,.2f}")
             
             return qty
             
@@ -1985,13 +2002,13 @@ class TradingEngine:
                 if current_ltp_ce is not None and current_ltp_ce > 0:
                     close_side = 'SELL' if current_position_ce == 'BUY' else 'BUY'
                     
-                    logger.info(f"Attempting to square off CE position: {current_position_ce} at ₹{current_ltp_ce}")
+                    logger.info(f"Attempting to square off CE position: {current_position_ce} at Rs.{current_ltp_ce}")
                     
                     if self.place_closing_order(close_side, current_ltp_ce, 'CE'):
                         success_count += 1
                         alert_manager.add_alert('success', 'CE Squared Off', 
-                                            f'CE {current_position_ce} position squared off at ₹{current_ltp_ce}', 'success')
-                        logger.info(f"CE position squared off: {current_position_ce} at ₹{current_ltp_ce}")
+                                            f'CE {current_position_ce} position squared off at Rs.{current_ltp_ce}', 'success')
+                        logger.info(f"CE position squared off: {current_position_ce} at Rs.{current_ltp_ce}")
                     else:
                         error_count += 1
                         alert_manager.add_alert('error', 'CE Square Off Failed', 
@@ -2017,13 +2034,13 @@ class TradingEngine:
                 if current_ltp_pe is not None and current_ltp_pe > 0:
                     close_side = 'SELL' if current_position_pe == 'BUY' else 'BUY'
                     
-                    logger.info(f"Attempting to square off PE position: {current_position_pe} at ₹{current_ltp_pe}")
+                    logger.info(f"Attempting to square off PE position: {current_position_pe} at Rs.{current_ltp_pe}")
                     
                     if self.place_closing_order(close_side, current_ltp_pe, 'PE'):
                         success_count += 1
                         alert_manager.add_alert('success', 'PE Squared Off', 
-                                            f'PE {current_position_pe} position squared off at ₹{current_ltp_pe}', 'success')
-                        logger.info(f"PE position squared off: {current_position_pe} at ₹{current_ltp_pe}")
+                                            f'PE {current_position_pe} position squared off at Rs.{current_ltp_pe}', 'success')
+                        logger.info(f"PE position squared off: {current_position_pe} at Rs.{current_ltp_pe}")
                     else:
                         error_count += 1
                         alert_manager.add_alert('error', 'PE Square Off Failed', 
@@ -2110,9 +2127,9 @@ class TradingEngine:
                 }
                 orders.append(order)
                 alert_manager.add_alert('trade', 'Position Opened',
-                                    f'{side} {scrip_type} at ₹{price:.2f} - Quantity: {config["quantity"]}', 'success')
+                                    f'{side} {scrip_type} at Rs.{price:.2f} - Quantity: {config["quantity"]}', 'success')
                 self.daily_trades += 1
-                logger.info(f"Position opened: {side} {scrip_type} at ₹{price:.2f}")
+                logger.info(f"Position opened: {side} {scrip_type} at Rs.{price:.2f}")
             else:
                 alert_manager.add_alert('error', 'Order Failed',
                                     f'Failed to place {side} order for {scrip_type}', 'error')
@@ -2147,7 +2164,7 @@ class TradingEngine:
                 logger.error(f"Invalid quantity: {config['quantity']}")
                 return False
             
-            logger.info(f"Placing {side} order for {scrip_type} - Scrip: {scrip_code}, Quantity: {config['quantity']}, Price: ₹{price}")
+            logger.info(f"Placing {side} order for {scrip_type} - Scrip: {scrip_code}, Quantity: {config['quantity']}, Price: Rs.{price}")
             
             if side == 'BUY':
                 order_success = Buy_place_order(scrip_code, config['quantity'], config['exchange'])
@@ -2164,7 +2181,7 @@ class TradingEngine:
             else:
                 pnl = (entry_price - price) * config['quantity']
             
-            logger.info(f"Calculated P&L for {scrip_type}: ₹{pnl:.2f} (Entry: ₹{entry_price}, Exit: ₹{price}, Position: {current_position})")
+            logger.info(f"Calculated P&L for {scrip_type}: Rs.{pnl:.2f} (Entry: Rs.{entry_price}, Exit: Rs.{price}, Position: {current_position})")
             
             self.update_trade_statistics(stats, pnl, trades)
             self.update_portfolio_on_close(entry_price, pnl)
@@ -2203,7 +2220,7 @@ class TradingEngine:
                 pe_stats['entry_price'] = 0
                 pe_stats['unrealized_pnl'] = 0
             
-            logger.info(f"Successfully closed {current_position} {scrip_type} position. P&L: ₹{pnl:.2f}")
+            logger.info(f"Successfully closed {current_position} {scrip_type} position. P&L: Rs.{pnl:.2f}")
             return True
             
         except Exception as e:
@@ -2354,7 +2371,7 @@ class TradingEngine:
                     
                     severity = 'success' if pnl > 0 else 'error'
                     alert_manager.add_alert('trade', 'Position Closed', 
-                                          f'{current_position} {scrip_type} closed. P&L: ₹{pnl:.2f}', severity)
+                                          f'{current_position} {scrip_type} closed. P&L: Rs.{pnl:.2f}', severity)
                     
                     if scrip_type == 'CE':
                         current_position_ce = None
@@ -2364,7 +2381,7 @@ class TradingEngine:
                         pe_stats['entry_price'] = 0
                     
                     self.daily_trades += 1
-                    logger.info(f"Position closed: {current_position} {scrip_type} P&L: ₹{pnl:.2f}")
+                    logger.info(f"Position closed: {current_position} {scrip_type} P&L: Rs.{pnl:.2f}")
                 else:
                     alert_manager.add_alert('error', 'Order Failed', 
                                           f'Failed to close {current_position} position for {scrip_type}', 'error')
@@ -2462,11 +2479,19 @@ def login():
             print("Failed to update scrip master data")
             # We'll continue anyway as the existing data might still be usable
 
-        # Generate TOTP for token refresh and handle OAuth2 flow automatically
+        # Generate TOTP for token refresh and handle OAuth2 flow
         auth_result = get_access_token()
 
-        if auth_result['success']:
-            # Authentication was successful, redirect to dashboard
+        if auth_result.get('auth_pending'):
+            # Authentication is pending, return TOTP for frontend display
+            return jsonify({
+                'success': True,
+                'auth_pending': True,
+                'totp_code': auth_result.get('totp_code'),
+                'message': 'Authentication requires TOTP. Please check the TOTP code.'
+            })
+        elif auth_result['success']:
+            # Authentication was already completed, redirect to dashboard
             return jsonify({
                 'success': True,
                 'redirect_url': url_for('dashboard'),
@@ -2485,6 +2510,13 @@ def login():
 
 @app.route('/dashboard')
 def dashboard():
+    global auth_completed, current_totp_code
+    # Check if authentication is complete
+    if not auth_completed:
+        # Reset authentication status
+        auth_completed = False
+        current_totp_code = None
+        return redirect(url_for('index'))
     return render_template('dashboard.html')
 
 @app.route('/api/scrips/exchanges')
@@ -3192,12 +3224,12 @@ if __name__ == '__main__':
     print(f"PE Scrip: {config['pe_scrip_code']}")
     print(f"Exchange: {config['exchange']}")
     print(f"Quantity: {config['quantity']}")
-    print(f"Capital: ₹{config['capital']:,.2f}")
+    print(f"Capital: Rs.{config['capital']:,.2f}")
     print(f"Auto Scrip Update: {'Enabled' if config.get('auto_scrip_update', 'enabled') == 'enabled' else 'Disabled'}")
     print(f"Price Difference Threshold: {config.get('price_difference_threshold', 40.0)}%")
-    print("\n🔥 REAL DATA TRADING ACTIVE")
-    print("⚠️  This system will place REAL orders using apifunction.py!")
-    print("✨ FIXED FEATURES:")
+    print("\n[ACTIVE] REAL DATA TRADING ACTIVE")
+    print("[WARNING] This system will place REAL orders using apifunction.py!")
+    print("[FEATURES] FIXED FEATURES:")
     print("   - Proper global variable handling throughout")
     print("   - Immediate scrip code updates when price difference exceeds threshold")
     print("   - Complete history clearing and rebuilding with new data")

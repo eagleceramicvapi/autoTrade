@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(pkill:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "mcp__render__update_web_service",
+      "mcp__render__list_deploys",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__render__list_logs",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

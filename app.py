@@ -3239,6 +3239,8 @@ if __name__ == '__main__':
     
     alert_manager.add_alert('system', 'System Started', 'FIXED Real data trading dashboard initialized', 'success')
 
+    # For Docker/Gunicorn deployment, expose app for import
+if __name__ == "__main__":
     # For Render deployment, use 0.0.0.0 and PORT environment variable
     port = int(os.environ.get('PORT', 5012))
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)

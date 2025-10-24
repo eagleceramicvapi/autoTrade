@@ -3238,5 +3238,7 @@ if __name__ == '__main__':
     print("   - All global variables properly declared at module level")
     
     alert_manager.add_alert('system', 'System Started', 'FIXED Real data trading dashboard initialized', 'success')
-    
-    app.run(host='127.0.0.1', port=5012, debug=True, use_reloader=False)
+
+    # For Render deployment, use 0.0.0.0 and PORT environment variable
+    port = int(os.environ.get('PORT', 5012))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)

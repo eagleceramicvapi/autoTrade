@@ -25,7 +25,10 @@ DEPLOYED_REDIRECT_URL = "/api/sas_oauth_callback"
 BASE_URL = "https://api.stocko.in"
 TOTP_SECRET = "T4JZGOUEE2G3NOCZ"
 TOKEN_FILE = "access_token.json"
-PORT = 65015
+
+# Use PORT environment variable for Render deployment, fallback to 65015 for local development
+PORT = int(os.environ.get('SAS_PORT', 65015))
+HOST = '0.0.0.0' if os.environ.get('SAS_PORT') else '127.0.0.1'
 
 
 def get_oauth_authorization_url(redirect_url=None):
@@ -33,9 +36,15 @@ def get_oauth_authorization_url(redirect_url=None):
     Get the OAuth authorization URL for SASOnline.
     Returns: authorization URL
     """
-    # Use provided redirect_url or default to local redirect URL
+    # Use provided redirect_url or default based on environment
     if redirect_url is None:
-        redirect_url = LOCAL_REDIRECT_URL
+        # Check if we're running in deployed environment
+        if os.environ.get('SAS_PORT'):
+            # For deployed environments, use DEPLOYED_REDIRECT_URL with full domain
+            # This will be handled by the main app, not the OAuth service
+            return None  # Indicate that OAuth flow will be handled differently in deployed env
+        else:
+            redirect_url = LOCAL_REDIRECT_URL
 
     oauth = OAuth2Session(CLIENT_ID, redirect_uri=redirect_url, scope='orders holdings')
     auth_url, _ = oauth.authorization_url(f'{BASE_URL}/oauth2/auth')
@@ -64,7 +73,14 @@ def sasonline_oauth_login() -> dict:
     @app.route('/')
     def callback():
         try:
-            oauth = OAuth2Session(CLIENT_ID, redirect_uri=LOCAL_REDIRECT_URL, scope='orders holdings')
+            # Use appropriate redirect URL based on environment
+            if os.environ.get('SAS_PORT'):
+                # For deployed environments, use the main app's OAuth callback
+                redirect_url = request.url_root.rstrip('/') + DEPLOYED_REDIRECT_URL
+            else:
+                redirect_url = LOCAL_REDIRECT_URL
+
+            oauth = OAuth2Session(CLIENT_ID, redirect_uri=redirect_url, scope='orders holdings')
             token = oauth.fetch_token(
                 f'{BASE_URL}/oauth2/token',
                 client_secret=CLIENT_SECRET,
@@ -78,13 +94,20 @@ def sasonline_oauth_login() -> dict:
 
     @app.route('/start')
     def start():
-        oauth = OAuth2Session(CLIENT_ID, redirect_uri=LOCAL_REDIRECT_URL, scope='orders holdings')
+        # Use appropriate redirect URL based on environment
+        if os.environ.get('SAS_PORT'):
+            # For deployed environments, use the main app's OAuth callback
+            redirect_url = request.url_root.rstrip('/') + DEPLOYED_REDIRECT_URL
+        else:
+            redirect_url = LOCAL_REDIRECT_URL
+
+        oauth = OAuth2Session(CLIENT_ID, redirect_uri=redirect_url, scope='orders holdings')
         auth_url, _ = oauth.authorization_url(f'{BASE_URL}/oauth2/auth')
         return redirect(auth_url)
 
     # Run server
     def run_server():
-        app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False)
+        app.run(host=HOST, port=PORT, debug=False, use_reloader=False)
 
     thread = threading.Thread(target=run_server, daemon=True)
     thread.start()
@@ -101,7 +124,7 @@ def sasonline_oauth_login() -> dict:
 
     # Open browser
     print("Opening browser...")
-    webbrowser.open(f'http://127.0.0.1:{PORT}/start')
+    webbrowser.open(f'http://{HOST if HOST != "0.0.0.0" else "127.0.0.1"}:{PORT}/start')
 
     # Wait for login
     if shutdown_event.wait(timeout=180):

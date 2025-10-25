@@ -41,6 +41,24 @@ def sas_login():
         logger.error(f"SAS login error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route('/api/sas_oauth_callback')
+def sas_oauth_callback():
+    """OAuth callback endpoint for deployed environment"""
+    try:
+        # For deployed environment, we need to handle the OAuth callback differently
+        # This is a simplified implementation - in a real deployment, you would need
+        # to properly handle the OAuth flow with the external service
+        code = request.args.get('code')
+        if code:
+            # Here you would exchange the code for an access token
+            # For now, we'll just indicate that the callback was received
+            return "<h2>OAuth Callback Received!</h2><p>Code received. In a deployed environment, this would be exchanged for an access token.</p>", 200
+        else:
+            return "<h2>OAuth Callback Error</h2><p>No authorization code received.</p>", 400
+    except Exception as e:
+        logger.error(f"OAuth callback error: {e}")
+        return f"<h2>OAuth Callback Error</h2><p>{str(e)}</p>", 500
+
 # ============================================================================
 # GLOBAL VARIABLES - All declared at module level
 # ============================================================================
@@ -2523,7 +2541,9 @@ def check_expiry():
 def open_browser():
     """Open browser after delay."""
     time.sleep(5)
-    webbrowser.open('http://127.0.0.1:5012')
+    port = int(os.environ.get('PORT', 5012))
+    host = '127.0.0.1'  # Always use localhost for browser opening
+    webbrowser.open(f'http://{host}:{port}')
 
 
 # ============================================================================
@@ -2534,15 +2554,20 @@ if __name__ == '__main__':
     check_expiry()
     threading.Thread(target=open_browser).start()
     load_scrip_master_from_csv('scripmaster.csv')
-    
+
     # Update portfolio initial balance
     portfolio_data['available_balance'] = config['capital']
     portfolio_data['free_margin'] = config['capital']
-    
+
     if not os.path.exists('templates'):
         os.makedirs('templates')
-    
+
+    # Use PORT environment variable for Render deployment, fallback to 5012 for local development
+    port = int(os.environ.get('PORT', 5012))
+    host = '0.0.0.0' if os.environ.get('PORT') else '127.0.0.1'
+    debug_mode = False if os.environ.get('PORT') else True
+
     print("=== FIXED Real Data Trading Dashboard ===")
-    print("Dashboard available at: http://127.0.0.1:5012")    
+    print(f"Dashboard available at: http://{host}:{port}")
     alert_manager.add_alert('system', 'System Started', 'FIXED Real data trading dashboard initialized', 'success')
-    app.run(host='127.0.0.1', port=5012, debug=True, use_reloader=False)
+    app.run(host=host, port=port, debug=debug_mode, use_reloader=False)

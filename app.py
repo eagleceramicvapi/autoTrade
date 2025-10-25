@@ -14,7 +14,7 @@ import sys
 import pandas as pd
 import webbrowser
 from scripupdate import generate_scripmaster_csv
-from sastoken import sasonline_oauth_login
+from sastoken import sasonline_oauth_login, get_oauth_authorization_url
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

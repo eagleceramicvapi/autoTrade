@@ -1852,6 +1852,10 @@ body {
                             Recent Orders
                             <span class="real-data-badge">Real Orders</span>
                         </div>
+                        <button class="control-btn btn-primary" onclick="exportOrders()" style="margin-left: auto;">
+                            <i class="fas fa-download"></i>
+                            Export Orders
+                        </button>
                     </div>
                     <table class="orders-table">
                         <thead>
@@ -2079,7 +2083,10 @@ body {
                         <span class="real-data-badge">Live</span>
                     </div>
                 </div>
-                
+                <div class="card-body" style="text-align: center; padding: 40px;">
+                    <h3>Test Coming Soon!</h3>
+                    <p>This feature is currently under development.</p>
+                </div>
             </div>
         </div>
 
@@ -2173,11 +2180,22 @@ body {
                         <i class="fas fa-save"></i>
                         Save Real Trading Settings
                     </button>
-                    
+
                     <button class="control-btn btn-primary" onclick="openScripSelectionModal()">
+                        <i class="fas fa-list"></i>
                         Scrip Selection
                     </button>
-                    </div>
+
+                    <button class="control-btn btn-primary" id="updateScripmasterBtn" onclick="updateScripmaster()">
+                        <i class="fas fa-sync-alt"></i>
+                        Update Scripmaster
+                    </button>
+
+                    <button class="control-btn btn-primary" id="sasLoginBtn" onclick="performSASLogin()">
+                        <i class="fas fa-sign-in-alt"></i>
+                        SAS Login
+                    </button>
+                </div>
                 <div class="error-message" id="settingsError" style="display: none;"></div>
             </div>
         </div>
@@ -2189,6 +2207,10 @@ body {
                     Trade History
                     <span class="real-data-badge">Live</span>
                 </div>
+                    <button class="control-btn btn-primary" onclick="exportTrades()" style="margin-left: auto;">
+                        <i class="fas fa-download"></i>
+                        Export Trades
+                    </button>
                 </div>
                 <!-- Trade history table -->
                  <div style="display:flex; gap:8px; align-items:end; margin:10px 0;">
@@ -2247,10 +2269,11 @@ body {
                     <th>Quantity</th>
                     <th>Price</th>
                     <th>Value</th>
+                    <th>PNL</th>
                     </tr>
                 </thead>
                 <tbody id="tradeHistoryTableBody">
-                    <tr><td colspan="7" style="text-align:center; color: #94a3b8;">No trades yet</td></tr>
+                    <tr><td colspan="8" style="text-align:center; color: #94a3b8;">No trades yet</td></tr>
                 </tbody>
                 </table>
             </div>
@@ -3092,6 +3115,57 @@ body {
                 .catch(error => console.error('Error fetching real orders:', error));
         }
 
+        function exportOrders() {
+            fetch('/api/orders/combined')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.orders && data.orders.length > 0) {
+                        // Create CSV content
+                        let csvContent = "Time,Scrip Name,Type,Side,Price,Quantity,Status\n";
+
+                        data.orders.forEach(order => {
+                            const time = formatTime(order.timestamp);
+                            const scripName = order.scrip_name || 'N/A';
+                            const type = order.scrip_type || 'CE';
+                            const side = order.side || '';
+                            const price = order.price || '';
+                            const quantity = order.quantity || '';
+                            const status = order.status || 'EXECUTED';
+
+                            // Escape any commas or quotes in the data
+                            const escapeField = (field) => {
+                                if (typeof field === 'string' && (field.includes(',') || field.includes('"'))) {
+                                    return `"${field.replace(/"/g, '""')}"`;
+                                }
+                                return field;
+                            };
+
+                            csvContent += `${escapeField(time)},${escapeField(scripName)},${escapeField(type)},${escapeField(side)},${escapeField(price)},${escapeField(quantity)},${escapeField(status)}\n`;
+                        });
+
+                        // Create download link
+                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                        link.setAttribute('href', url);
+                        link.setAttribute('download', `orders_export_${timestamp}.csv`);
+                        link.style.visibility = 'hidden';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+
+                        showToast('Export Successful', `Exported ${data.orders.length} orders to CSV file`, 'success');
+                    } else {
+                        showToast('No Data', 'No orders found to export', 'info');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error exporting orders:', error);
+                    showToast('Export Failed', 'Failed to export orders. Check console for details.', 'error');
+                });
+        }
+
 
         function updateRealAnalytics() {
             // Update P&L Chart with real data
@@ -3440,6 +3514,33 @@ function closeScripSelectionModal() {
   clearScripSelectError();
 }
 
+async function performSASLogin() {
+  const button = document.getElementById('sasLoginBtn');
+  setButtonLoading('sasLoginBtn', true);
+  
+  try {
+    const response = await fetch('/api/sas_login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      showToast('Login Successful', 'Successfully logged in to SAS Online', 'success');
+    } else {
+      showToast('Login Failed', data.message || 'Failed to login to SAS Online', 'error');
+    }
+  } catch (error) {
+    console.error('SAS Login error:', error);
+    showToast('Login Error', 'An error occurred during SAS Online login', 'error');
+  } finally {
+    setButtonLoading('sasLoginBtn', false);
+  }
+}
+
 function showScripSelectError(msg) {
   const el = qs('scripSelectError');
   el.textContent = msg;
@@ -3481,19 +3582,19 @@ async function populateExchanges(prefillCode) {
     if (t === 'date') {
       const from = document.getElementById('thFrom').value;
       const to = document.getElementById('thTo').value;
-      if (from) base.searchParams.set('fromdate', from);
-      if (to)   base.searchParams.set('todate', to);
+      if (from) base.searchParams.set('from_date', from);
+      if (to)   base.searchParams.set('to_date', to);
     } else if (t === 'scrip') {
       const s = document.getElementById('thScripName').value.trim();
-      if (s) base.searchParams.set('scripname', s);
+      if (s) base.searchParams.set('scrip_name', s);
     } else if (t === 'scriptype') {
       const st = document.getElementById('thScripType').value;
-      if (st) base.searchParams.set('scriptype', st);
+      if (st) base.searchParams.set('scrip_type', st);
     } else if (t === 'pnl') {
       const mn = document.getElementById('thPnlMin').value;
       const mx = document.getElementById('thPnlMax').value;
-      if (mn) base.searchParams.set('pnlmin', mn);
-      if (mx) base.searchParams.set('pnlmax', mx);
+      if (mn) base.searchParams.set('pnl_min', mn);
+      if (mx) base.searchParams.set('pnl_max', mx);
     }
     return base.toString();
   }
@@ -3518,15 +3619,71 @@ async function populateExchanges(prefillCode) {
             <td>${row['Quantity'] ?? ''}</td>
             <td>${row['Price'] ?? ''}</td>
             <td>${row['Value'] ?? ''}</td>
+            <td>${row['PNL'] ?? ''}</td>
           `;
           tbody.appendChild(tr);
         });
       } else {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8">No trades found</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#94a3b8">No trades found</td></tr>`;
       }
     } catch (e) {
       console.error('Trade history fetch error', e);
     }
+  }
+
+  function exportTrades() {
+    // First, get the current search parameters
+    const url = buildTradeHistoryUrl();
+
+    fetch(url)
+      .then(response => response.json())
+      .then(result => {
+        if (result.data && result.data.length > 0) {
+          // Create CSV content
+          let csvContent = "Date,Time,Scrip Name,Scrip Type,Quantity,Price,Value,PNL\n";
+
+          result.data.forEach(row => {
+            const date = row['Date'] || '';
+            const time = row['Time'] || '';
+            const scripName = row['Scrip Name'] || '';
+            const scripType = row['Scrip Type'] || '';
+            const quantity = row['Quantity'] ?? '';
+            const price = row['Price'] ?? '';
+            const value = row['Value'] ?? '';
+            const pnl = row['PNL'] ?? '';
+
+            // Escape any commas or quotes in the data
+            const escapeField = (field) => {
+              if (typeof field === 'string' && (field.includes(',') || field.includes('"'))) {
+                return `"${field.replace(/"/g, '""')}"`;
+              }
+              return field;
+            };
+
+            csvContent += `${escapeField(date)},${escapeField(time)},${escapeField(scripName)},${escapeField(scripType)},${escapeField(quantity)},${escapeField(price)},${escapeField(value)},${escapeField(pnl)}\n`;
+          });
+
+          // Create download link
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+          link.setAttribute('href', url);
+          link.setAttribute('download', `trades_export_${timestamp}.csv`);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          showToast('Export Successful', `Exported ${result.data.length} trades to CSV file`, 'success');
+        } else {
+          showToast('No Data', 'No trades found to export', 'info');
+        }
+      })
+      .catch(error => {
+        console.error('Error exporting trades:', error);
+        showToast('Export Failed', 'Failed to export trades. Check console for details.', 'error');
+      });
   }
 
   // Optional: auto-load when the Trade History tab is shown
@@ -3640,6 +3797,36 @@ function applySelectedScrips() {
     console.error('applySelectedScrips error', e);
     showScripSelectError('Failed to apply selected scrips.');
   }
+}
+
+// Trigger a server-side regeneration of scripmaster.csv and reload it
+async function updateScripmaster() {
+    setButtonLoading('updateScripmasterBtn', true);
+    try {
+        showToast('Scripmaster', 'Starting scripmaster update...', 'info');
+        const resp = await fetch('/api/generate_scripmaster_csv', { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+            showToast('Scripmaster Updated', data.message || 'Scripmaster regenerated', 'success');
+            // Reload settings so UI shows new scrip names/codes
+            await fetchAndRenderConfig();
+            // If scrip selection modal is open, refresh its lists
+            try {
+                if (document.getElementById('scripSelectionModal').style.display === 'block') {
+                    await populateExchanges(document.getElementById('exchange')?.value || null);
+                    await populateExpiries(document.getElementById('selExchange').value || null);
+                    await populateScripLists(document.getElementById('selExchange').value, document.getElementById('selExpiry').value);
+                }
+            } catch (e) { console.warn('Failed to refresh selection modal after scripmaster update', e); }
+        } else {
+            showToast('Update Failed', data.message || 'Failed to update scripmaster', 'error');
+        }
+    } catch (e) {
+        console.error('updateScripmaster error', e);
+        showToast('Error', 'Failed to update scripmaster. Check server logs.', 'error');
+    } finally {
+        setButtonLoading('updateScripmasterBtn', false);
+    }
 }
 </script>
 </body>

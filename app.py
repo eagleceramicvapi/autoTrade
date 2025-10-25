@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 import json
 import threading
 import time
@@ -13,25 +13,40 @@ import math, csv
 import sys
 import pandas as pd
 import webbrowser
-from pathlib import Path
-from requests_oauthlib import OAuth2Session
-from urllib.parse import urlparse, parse_qs
-import pyotp
-import pyperclip
+from scripupdate import generate_scripmaster_csv
+from sastoken import sasonline_oauth_login
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# This is crucial for local development with HTTP redirects
-# In a production environment, you should always use HTTPS and remove this line.
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-
 app = Flask(__name__)
+
+# ============================================================================
+# AUTHENTICATION ROUTES
+# ============================================================================
+
+@app.route('/api/sas_login', methods=['POST'])
+def sas_login():
+    try:
+        result = sasonline_oauth_login()
+        if result and result.get("success"):
+            # If token is returned in result, set it to global variable
+            if "token" in result:
+                global access_token
+                access_token = result["token"]
+            return jsonify({"status": "success", "message": "Login successful"}), 200
+        return jsonify({"status": "error", "message": "Login failed"}), 400
+    except Exception as e:
+        logger.error(f"SAS login error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ============================================================================
 # GLOBAL VARIABLES - All declared at module level
 # ============================================================================
+
+# Authentication data
+access_token = None
 
 # Trading data
 price_history_ce = deque(maxlen=600)
@@ -47,10 +62,6 @@ alerts = []
 squared_off = False
 ce_stop = "No"
 pe_stop = "No"
-
-# Authentication data
-current_totp_code = None
-auth_completed = False
 
 # Scrip update control variables
 scrip_update_in_progress = False
@@ -79,9 +90,6 @@ config = {
     'strategy_range': 8,
     'main_time_period': 300
 }
-
-# OAuth state for security
-oauth_state = None
 
 VALID_EXCHANGES = ['N', 'B', 'M']
 
@@ -155,7 +163,7 @@ portfolio_data = {
 }
 
 
-def write_order_to_csv(filename, scrip_name, scrip_type, qty, price):
+def write_order_to_csv(filename, scrip_name, scrip_type, qty, price, pnl=0):
     value = qty * price
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d")
@@ -164,588 +172,8 @@ def write_order_to_csv(filename, scrip_name, scrip_type, qty, price):
         writer = csv.writer(file)
         # Optionally write header if file is empty
         if file.tell() == 0:
-            writer.writerow(['Date', 'Time', 'Scrip Name', 'Scrip Type', 'Quantity', 'Price', 'Value'])
-        writer.writerow([date_str, time_str, scrip_name, scrip_type, qty, price, value])
-
-
-# ============================================================================
-# NSE_BSE_Single.py Functions (Integrated)
-# ============================================================================
-
-def get_ltp_nse_bse(exchange, scrip_code, instrument_name):
-    """Fetch Last Traded Price (LTP) for a given instrument."""
-    url = 'https://Openapi.5paisa.com/VendorsAPI/Service1.svc/V1/MarketFeed'
-    USER_KEY = 'Q4O7AsAK0iUABwjsvYfmfNU1cMiMWXai'  # Replace with your valid API key
-
-    payload = {
-        'head': {'key': USER_KEY},
-        'body': {
-            'MarketFeedData': [
-                {'Exch': exchange, 'ExchType': 'C', 'ScripCode': scrip_code, 'ScripData': ''}
-            ],
-            'LastRequestTime': '/Date(0)/',
-            'RefreshRate': 'H'
-        }
-    }
-
-    try:
-        logger.info(f'Fetching LTP for {instrument_name} ({exchange}, {scrip_code})')
-        response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
-
-        logger.info(f'Response status for {instrument_name}: {response.status_code}')
-        if response.status_code != 200:
-            raise Exception(f'API request failed with status {response.status_code}')
-
-        data = response.json()
-        if data.get('body') and data['body'].get('Data') and len(data['body']['Data']) > 0:
-            ltp = data['body']['Data'][0].get('LastRate')
-            if ltp is not None:
-                logger.info(f'LTP for {instrument_name}: {ltp}')
-                return ltp
-
-        logger.error(f'No valid LTP data for {instrument_name}')
-        return None
-    except Exception as error:
-        logger.error(f'Error fetching LTP for {instrument_name}: {str(error)}')
-        return None
-
-
-def download_scrip_master(segment):
-    """Download scrip master data for a given segment."""
-    try:
-        with open('token.txt', 'r') as f:
-            token = f.read().strip()
-
-        response = requests.get(
-            f'https://Openapi.5paisa.com/VendorsAPI/Service1.svc/ScripMaster/segment/{segment}',
-            headers={
-                'Authorization': f'Bearer {token}',
-                'Accept': 'text/csv',
-                'Content-Type': 'text/csv'
-            }
-        )
-
-        if response.status_code == 401:
-            print(f'Token expired or invalid for {segment}. Please update token.')
-            raise Exception('Unauthorized')
-
-        response.raise_for_status()
-        return {'segment': segment, 'data': response.text}
-    except Exception as error:
-        print(f'Error downloading {segment} scrip master: {str(error)}')
-        raise
-
-
-def verify_file(file_name):
-    """Verify and display file information."""
-    try:
-        file_path = Path(file_name)
-        file_size = file_path.stat().st_size
-        print(f'File {file_name} size: {file_size} bytes')
-
-        with open(file_name, 'r') as f:
-            reader = csv.DictReader(f)
-            records = list(reader)
-            first_rows = records[:5]
-            print(f'\\nFirst 5 rows of {file_name}:')
-            for row in first_rows:
-                print(json.dumps(row))
-    except Exception as error:
-        print(f'Error verifying file {file_name}: {str(error)}')
-
-
-def parse_date(date_str):
-    """Parse date string in multiple formats."""
-    if not date_str:
-        return None
-
-    formats = ['%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
-    for fmt in formats:
-        try:
-            return datetime.strptime(date_str, fmt)
-        except ValueError:
-            continue
-    return None
-
-
-def filter_scrip_master(records, instrument_name, ltp, exchange):
-    """Filter scrip master data for specific instrument."""
-    try:
-        print(f'Filtering data for {instrument_name} with nearest expiry and 10 scrips above/below LTP...')
-
-        # Filter for NIFTY or SENSEX using SymbolRoot
-        filtered_records = [
-            r for r in records
-            if r.get('SymbolRoot', '').upper() == instrument_name.upper()
-        ]
-
-        if not filtered_records:
-            print(f'No {instrument_name} records found using SymbolRoot {instrument_name}')
-            return []
-
-        # Parse expiry dates
-        today = datetime.now().date()
-        expiry_dates = list(set(r.get('Expiry') for r in filtered_records if r.get('Expiry')))
-
-        valid_expiries = []
-        for date_str in expiry_dates:
-            parsed_date = parse_date(date_str)
-            if parsed_date and parsed_date.date() >= today:
-                valid_expiries.append(parsed_date)
-
-        if not valid_expiries:
-            print(f'No valid nearest expiry found for {instrument_name}')
-            logger.error(f'No valid nearest expiry after parsing for {instrument_name}')
-            return []
-
-        nearest_expiry = min(valid_expiries)
-        nearest_expiry_str = nearest_expiry.strftime('%d-%m-%Y')
-        print(f'Nearest expiry for {instrument_name}: {nearest_expiry_str}')
-
-        # Filter records for the nearest expiry and exclude ScripType "XX"
-        expiry_records = [
-            r for r in filtered_records
-            if parse_date(r.get('Expiry', '')) and
-            parse_date(r.get('Expiry', '')).strftime('%d-%m-%Y') == nearest_expiry_str and
-            r.get('ScripType') != 'XX'
-        ]
-
-        # Use provided LTP or fallback to a default value
-        effective_ltp = ltp if ltp else 1800
-        if not effective_ltp:
-            print(f'No valid LTP for {instrument_name}')
-            return []
-
-        # Filter 15 scrips above and 15 scrips below LTP based on StrikeRate
-        above_ltp = sorted(
-            [r for r in expiry_records if float(r.get('StrikeRate', 0)) > effective_ltp],
-            key=lambda x: float(x.get('StrikeRate', 0))
-        )[:15]
-
-        below_ltp = sorted(
-            [r for r in expiry_records if float(r.get('StrikeRate', 0)) <= effective_ltp],
-            key=lambda x: float(x.get('StrikeRate', 0)),
-            reverse=True
-        )[:15]
-
-        selected_records = above_ltp + below_ltp
-
-        if not selected_records:
-            print(f'No records found above or below LTP for {instrument_name}')
-            return []
-
-        # Format records to match desired structure
-        final_records = []
-        for r in selected_records:
-            strike_rate = float(r.get('StrikeRate', 0))
-            final_records.append({
-                'Instrument': 'NIFTY' if exchange == 'N' else 'SENSEX',
-                'Exch': r.get('Exch', ''),
-                'ExchType': r.get('ExchType', ''),
-                'ScripCode': r.get('ScripCode', ''),
-                'Name': r.get('Name', ''),
-                'Expiry': r.get('Expiry', nearest_expiry_str),
-                'ScripType': r.get('ScripType', ''),
-                'StrikeRate': strike_rate,
-                'LastRate': r.get('LastRate', ''),
-                'LotSize': r.get('LotSize', '20' if exchange == 'B' else '75'),
-                'QtyLimit': r.get('QtyLimit', ''),
-                'LTPPosition': 'Above' if strike_rate > effective_ltp else 'Below',
-                'Position': ''
-            })
-
-        print(f'Filtered {len(final_records)} scrips for {instrument_name} (10 above, 10 below LTP)')
-        return final_records
-    except Exception as error:
-        print(f'Error filtering data for {instrument_name}: {str(error)}')
-        logger.error(f'Filter error for {instrument_name}: {str(error)}')
-        return []
-
-
-def update_scrip_master():
-    """Main execution function to update scrip master data."""
-    try:
-        print('Starting downloads and LTP fetching...')
-
-        segments = [
-            {'segment': 'nse_fo', 'instrumentName': 'NIFTY'},
-            {'segment': 'bse_fo', 'instrumentName': 'SENSEX'}
-        ]
-
-        instruments = [
-            {'exchange': 'N', 'scripCode': 999920000, 'name': 'Nifty', 'segment': 'nse_fo'},
-            {'exchange': 'B', 'scripCode': 999901, 'name': 'Sensex', 'segment': 'bse_fo'}
-        ]
-
-        ltps = {}
-
-        # Fetch LTPs for Nifty and Sensex
-        for instrument in instruments:
-            ltp = get_ltp_nse_bse(instrument['exchange'], instrument['scripCode'], instrument['name'])
-            ltps[instrument['segment']] = ltp
-            print(f"{instrument['name']} LTP: {ltp if ltp is not None else 'Failed to fetch'}")
-
-        # Download scrip masters and parse
-        combined_records = []
-        common_headers = None
-
-        for segment_info in segments:
-            segment = segment_info['segment']
-            result = download_scrip_master(segment)
-
-            # Parse CSV data
-            csv_reader = csv.DictReader(result['data'].splitlines())
-            records = list(csv_reader)
-
-            if common_headers is None:
-                common_headers = list(records[0].keys()) if records else []
-            else:
-                current_headers = list(records[0].keys()) if records else []
-                if current_headers != common_headers:
-                    print(f'Header mismatch in {segment}. Using common headers.')
-                    normalized_records = []
-                    for record in records:
-                        normalized = {header: record.get(header, '') for header in common_headers}
-                        normalized_records.append(normalized)
-                    combined_records.extend(normalized_records)
-                    continue
-
-            combined_records.extend(records)
-
-        # Filter records for NIFTY and SENSEX with nearest expiry and LTP-based scrips
-        filtered_records = []
-        for segment_info in segments:
-            segment = segment_info['segment']
-            instrument_name = segment_info['instrumentName']
-            instrument = next(i for i in instruments if i['segment'] == segment)
-
-            segment_records = filter_scrip_master(
-                combined_records,
-                instrument_name,
-                ltps[segment],
-                instrument['exchange']
-            )
-            filtered_records.extend(segment_records)
-
-        # Sort records by StrikeRate
-        filtered_records.sort(key=lambda x: float(x['StrikeRate']))
-
-        # Save filtered data to a single CSV file with specified columns
-        combined_file_name = 'scripmaster.csv'
-        desired_columns = [
-            'Instrument', 'Exch', 'ExchType', 'ScripCode', 'Name', 'Expiry',
-            'ScripType', 'StrikeRate', 'LastRate', 'LotSize', 'QtyLimit',
-            'LTPPosition', 'Position'
-        ]
-
-        if filtered_records:
-            with open(combined_file_name, 'w', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=desired_columns)
-                writer.writeheader()
-                writer.writerows(filtered_records)
-            print(f'Successfully saved filtered NIFTY and SENSEX records to {combined_file_name}')
-            return True
-        else:
-            print('No filtered records to save to combined CSV.')
-            return False
-
-    except Exception as error:
-        print(f'Failed: {str(error)}')
-        logger.error(f'Scrip master update failed: {str(error)}')
-        return False
-
-
-# ============================================================================
-# GenerateTokenSAS.py Functions (Integrated)
-# ============================================================================
-
-def save_token_to_file(token_data, filename='access_token.json'):
-    """Save token information to a JSON file"""
-    token_info = {
-        'access_token': token_data['access_token'] if isinstance(token_data, dict) else token_data,
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    }
-
-    try:
-        # Get the current script's directory
-        root_dir = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(root_dir, filename)
-
-        # Save to JSON file with proper formatting
-        with open(file_path, 'w') as f:
-            json.dump(token_info, f, indent=4)
-
-        logger.info(f"Token saved successfully to: {file_path}")
-        return True
-    except Exception as e:
-        logger.error(f"Error saving token: {str(e)}")
-        return False
-
-
-def generate_totp():
-    """Generate TOTP code for authentication"""
-    otpauth_uri = "otpauth://totp/SASONLINE:DA251?secret=T4JZGOUEE2G3NOCZ&issuer=SASONLINE"
-    try:
-        # Parse the URI to get the query parameters
-        parsed_uri = urlparse(otpauth_uri)
-        query_params = parse_qs(parsed_uri.query)
-
-        # Extract the secret from the query parameters
-        secret = query_params.get('secret', [None])[0]
-
-        if secret:
-            totp = pyotp.TOTP(secret)
-            current_totp = totp.now()
-            # Store TOTP in a global variable for frontend access
-            global current_totp_code
-            current_totp_code = current_totp
-            print(f"Generated TOTP: {current_totp}")
-            return current_totp
-        else:
-            print("Error: Secret not found in otpauth URI.")
-            return None
-    except Exception as e:
-        print(f"Error generating TOTP: {e}")
-        return None
-
-
-# OAuth2 Server class for handling callbacks (similar to GenerateTokenSAS.py)
-class OAuth2Server:
-    """
-    Handles the Flask server for the OAuth2 callback.
-    """
-    def __init__(self, client_id, client_secret, redirect_url, base_url):
-        self.client_id = client_id
-        self.web_url = base_url.strip()
-        self.client_secret = client_secret
-        self.redirect_uri = redirect_url
-        self.authorization_base_url = f'{self.web_url}/oauth2/auth'
-        self.token_url = f'{self.web_url}/oauth2/token'
-        self.scope = 'orders holdings'
-        self.app = Flask(__name__)
-        self.app.secret_key = 'development_oauth'
-        self.access_token = ""
-        self.auth_successful = False
-
-    def create_app(self):
-        """
-        Configures and returns the Flask application instance.
-        """
-        app = self.app
-        client_id = self.client_id
-        redirect_uri = self.redirect_uri
-        scope = self.scope
-        authorization_base_url = self.authorization_base_url
-        token_url = self.token_url
-        client_secret = self.client_secret
-        server_instance = self
-
-        @app.route('/getcode')
-        def demo():
-            """
-            Initiates the OAuth2 authorization flow by redirecting to the
-            authorization server.
-            """
-            from flask import session
-            print(f"Session object: {session}")
-            oauth = OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scope)
-            authorization_url, state = oauth.authorization_url(authorization_base_url)
-            session['oauth_state'] = state
-            logger.debug(f'Authorization URL: {authorization_url}')
-            return redirect(authorization_url)
-
-        @app.route('/')  # This listens on the redirect URL and handles the callback
-        def callback():
-            """
-            Handles the OAuth2 callback from the authorization server,
-            exchanges the authorization code for an access token, saves it,
-            and then returns success message.
-            """
-            try:
-                from flask import session
-                oauth = OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scope)
-                logger.debug(f"Callback URL: {request.url}")
-
-                # Fetch the access token using the authorization response
-                token_data = oauth.fetch_token(
-                    token_url,
-                    client_secret=client_secret,
-                    authorization_response=request.url
-                )
-
-                server_instance.access_token = token_data['access_token']
-                server_instance.auth_successful = True
-                # Set global auth completion flag
-                global auth_completed
-                auth_completed = True
-                logger.debug(f"Access Token: {server_instance.access_token}")
-
-                # Save token to file for persistence
-                save_token_to_file(token_data)
-
-                return 'Authentication successful! Token saved. You can close this window.'
-
-            except Exception as e:
-                logger.error(f"Callback error: {str(e)}")
-                server_instance.auth_successful = False
-                return f"Error: {str(e)}"
-
-        return app
-
-    def fetch_access_token(self):
-        """Returns the obtained access token."""
-        return self.access_token
-
-    def is_auth_successful(self):
-        """Returns whether authentication was successful."""
-        return self.auth_successful
-
-
-def get_access_token():
-    """Get access token using OAuth2 flow - automatically handles the entire OAuth2 flow"""
-    try:
-        # Configuration for OAuth2
-        client_id = "SAS-CLIENT1"
-        client_secret = "Hhtg74iYYZY1nSJUvDBxKntGqfigem6yKyYw9rlb2qSXyhEEs8BZEtw27KsIE1UI"
-        redirect_url = "http://127.0.0.1:65015/"
-        base_url = "https://api.stocko.in"
-
-        # Create OAuth2 server instance
-        server = OAuth2Server(client_id, client_secret, redirect_url, base_url)
-        app = server.create_app()
-        app.env = 'development'
-
-        # Function to run Flask app in a thread
-        def run_flask_app():
-            app.run(host='127.0.0.1', debug=False, port=65015, use_reloader=False)
-
-        # Start Flask app in a separate thread
-        server_thread = threading.Thread(target=run_flask_app, daemon=True)
-        server_thread.start()
-
-        # Give the server a moment to start up
-        time.sleep(1)
-
-        # Generate TOTP
-        otpauth_uri = "otpauth://totp/SASONLINE:DA251?secret=T4JZGOUEE2G3NOCZ&issuer=SASONLINE"
-        try:
-            # Parse the URI to get the query parameters
-            parsed_uri = urlparse(otpauth_uri)
-            query_params = parse_qs(parsed_uri.query)
-
-            # Extract the secret from the query parameters
-            secret = query_params.get('secret', [None])[0]
-
-            if secret:
-                totp = pyotp.TOTP(secret)
-                current_totp = totp.now()
-                print(f"Generated TOTP: {current_totp}")
-                # Copy TOTP to clipboard
-                try:
-                    pyperclip.copy(current_totp)
-                    print("TOTP code copied to clipboard!")
-                except:
-                    print("Could not copy TOTP to clipboard, please copy manually:", current_totp)
-                totp_code = current_totp
-            else:
-                print("Error: Secret not found in otpauth URI.")
-                return {
-                    'success': False,
-                    'message': 'Failed to generate TOTP code'
-                }
-        except Exception as e:
-            print(f"Error generating TOTP: {e}")
-            return {
-                'success': False,
-                'message': f'Error generating TOTP: {str(e)}'
-            }
-
-        # Automatically open the browser to the /getcode endpoint
-        auth_url = f'http://127.0.0.1:65015/getcode'
-        print(f'Opening authorization URL in browser: {auth_url}\n')
-        webbrowser.open(auth_url)
-
-        # Return immediately with TOTP code for frontend display
-        return {
-            'success': True,
-            'message': 'TOTP generated successfully. Please enter it in the authentication site.',
-            'totp_code': totp_code,
-            'auth_pending': True
-        }
-
-    except Exception as e:
-        logger.error(f"Error in get_access_token: {str(e)}")
-        return {
-            'success': False,
-            'message': f'Error: {str(e)}'
-        }
-
-
-@app.route('/api/check_auth_status', methods=['GET'])
-def check_auth_status():
-    """API endpoint to check authentication status"""
-    global auth_completed, current_totp_code
-    return jsonify({
-        'auth_completed': auth_completed,
-        'totp_code': current_totp_code
-    })
-
-
-@app.route('/api/reset_auth', methods=['POST'])
-def reset_auth():
-    """API endpoint to reset authentication status"""
-    global auth_completed, current_totp_code
-    auth_completed = False
-    current_totp_code = None
-    return jsonify({'success': True, 'message': 'Authentication status reset'})
-
-
-def refresh_access_token(authorization_code):
-    """Refresh access token using authorization code"""
-    try:
-        # Configuration for OAuth2
-        client_id = "SAS-CLIENT1"
-        client_secret = "Hhtg74iYYZY1nSJUvDBxKntGqfigem6yKyYw9rlb2qSXyhEEs8BZEtw27KsIE1UI"
-        redirect_url = "http://127.0.0.1:65015/"
-        base_url = "https://api.stocko.in"
-        token_url = f"{base_url}/oauth2/token"
-
-        # Prepare the token request
-        data = {
-            'grant_type': 'authorization_code',
-            'client_id': client_id,
-            'client_secret': client_secret,
-            'redirect_uri': redirect_url,
-            'code': authorization_code
-        }
-
-        # Make the token request
-        response = requests.post(token_url, data=data)
-
-        if response.status_code == 200:
-            token_data = response.json()
-            # Save token to file
-            if save_token_to_file(token_data):
-                return {
-                    'success': True,
-                    'message': 'Access token refreshed successfully'
-                }
-            else:
-                return {
-                    'success': False,
-                    'message': 'Failed to save token to file'
-                }
-        else:
-            return {
-                'success': False,
-                'message': f'Failed to refresh token: {response.text}'
-            }
-    except Exception as e:
-        logger.error(f"Error refreshing access token: {str(e)}")
-        return {
-            'success': False,
-            'message': f'Error: {str(e)}'
-        }
+            writer.writerow(['Date', 'Time', 'Scrip Name', 'Scrip Type', 'Quantity', 'Price', 'Value', 'PNL'])
+        writer.writerow([date_str, time_str, scrip_name, scrip_type, qty, price, value, pnl])
 
 def get_ltp(scrip_data):
     url = "https://Openapi.5paisa.com/VendorsAPI/Service1.svc/V1/MarketFeed"
@@ -831,27 +259,13 @@ def get_index_ltp(scrip_data, exchange):
 
 # --- Order Placement Functions ---
 def Buy_place_order(instrument_token, quantity, exchange):
-    """
-    Place a market BUY order with specified instrument token and quantity.
-    
-    Args:
-        instrument_token (int): The instrument token for the stock/option
-        quantity (int): The quantity to buy
-    
-    Returns:
-        bool: True if order placed successfully, False otherwise
-    """
-    try:
-        with open("access_token.json", "r") as file:
-            token_data = json.load(file)
-        access_token = token_data["access_token"]
-    except FileNotFoundError:
-        logging.error("Error: access_token.json file not found.")
+
+    # Use global access_token variable instead of reading from file
+    global access_token
+    if not access_token:
+        logging.error("Error: access_token not available.")
         return False
-    except KeyError:
-        logging.error("Error: 'access_token' not found in access_token.json.")
-        return False
-    
+
     if exchange == "N":
         exchange_order = "NFO"
     else :
@@ -893,25 +307,11 @@ def Buy_place_order(instrument_token, quantity, exchange):
         return False
 
 def Sell_place_order(instrument_token, quantity, exchange):
-    """
-    Place a market SELL order with specified instrument token and quantity.
-    
-    Args:
-        instrument_token (int): The instrument token for the stock/option
-        quantity (int): The quantity to sell
-    
-    Returns:
-        bool: True if order placed successfully, False otherwise
-    """
-    try:
-        with open("access_token.json", "r") as file:
-            token_data = json.load(file)
-        access_token = token_data["access_token"]
-    except FileNotFoundError:
-        logging.error("Error: access_token.json file not found.")
-        return False
-    except KeyError:
-        logging.error("Error: 'access_token' not found in access_token.json.")
+
+    # Use global access_token variable instead of reading from file
+    global access_token
+    if not access_token:
+        logging.error("Error: access_token not available.")
         return False
 
     if exchange == "N":
@@ -1063,7 +463,10 @@ def find_nearest_150_scrips():
 
 def check_and_handle_price_difference():
     """Check price difference and handle scrip update workflow."""
-    global scrip_update_in_progress, trading_paused, last_price_check, config
+    global scrip_update_in_progress, trading_paused, last_price_check, config, current_position_ce, current_position_pe
+
+    if current_position_ce is not None and current_position_pe is not None:
+        return False
     
     try:
         current_time = time.time()
@@ -1151,7 +554,7 @@ def update_scrip_codes_immediately():
         old_ce_ltp = get_ltp(config.get('ce_scrip_code')) if config.get('ce_scrip_code') else 0
         old_pe_ltp = get_ltp(config.get('pe_scrip_code')) if config.get('pe_scrip_code') else 0
 
-        logger.info(f"Old LTPs - CE: Rs.{old_ce_ltp}, PE: Rs.{old_pe_ltp}")
+        logger.info(f"Old LTPs - CE: ₹{old_ce_ltp}, PE: ₹{old_pe_ltp}")
 
         best_ce_scrip, best_pe_scrip, ce_scrip_name, pe_scrip_name = find_nearest_150_scrips()
 
@@ -1159,7 +562,7 @@ def update_scrip_codes_immediately():
             logger.error("Could not find suitable new scrips")
             return False
 
-        logger.info(f"New LTPs - CE: Rs.{best_ce_scrip['ltp']}, PE: Rs.{best_pe_scrip['ltp']}")
+        logger.info(f"New LTPs - CE: ₹{best_ce_scrip['ltp']}, PE: ₹{best_pe_scrip['ltp']}")
 
         old_ce_code = config.get('ce_scrip_code', '')
         old_pe_code = config.get('pe_scrip_code', '')
@@ -1508,7 +911,7 @@ class TradingEngine:
             num_lots = max(1, round(base_qty / lot_size))
             qty = num_lots * lot_size
             
-            logger.info(f"[{scrip_type}] Auto-calculated Qty: {qty} ({num_lots} lots × {lot_size}) | LTP: Rs.{ltp:.2f} | Allocated Capital: Rs.{allocated_capital:,.2f}")
+            logger.info(f"[{scrip_type}] Auto-calculated Qty: {qty} ({num_lots} lots × {lot_size}) | LTP: ₹{ltp:.2f} | Allocated Capital: ₹{allocated_capital:,.2f}")
             
             return qty
             
@@ -2002,13 +1405,13 @@ class TradingEngine:
                 if current_ltp_ce is not None and current_ltp_ce > 0:
                     close_side = 'SELL' if current_position_ce == 'BUY' else 'BUY'
                     
-                    logger.info(f"Attempting to square off CE position: {current_position_ce} at Rs.{current_ltp_ce}")
+                    logger.info(f"Attempting to square off CE position: {current_position_ce} at ₹{current_ltp_ce}")
                     
                     if self.place_closing_order(close_side, current_ltp_ce, 'CE'):
                         success_count += 1
                         alert_manager.add_alert('success', 'CE Squared Off', 
-                                            f'CE {current_position_ce} position squared off at Rs.{current_ltp_ce}', 'success')
-                        logger.info(f"CE position squared off: {current_position_ce} at Rs.{current_ltp_ce}")
+                                            f'CE {current_position_ce} position squared off at ₹{current_ltp_ce}', 'success')
+                        logger.info(f"CE position squared off: {current_position_ce} at ₹{current_ltp_ce}")
                     else:
                         error_count += 1
                         alert_manager.add_alert('error', 'CE Square Off Failed', 
@@ -2034,13 +1437,13 @@ class TradingEngine:
                 if current_ltp_pe is not None and current_ltp_pe > 0:
                     close_side = 'SELL' if current_position_pe == 'BUY' else 'BUY'
                     
-                    logger.info(f"Attempting to square off PE position: {current_position_pe} at Rs.{current_ltp_pe}")
+                    logger.info(f"Attempting to square off PE position: {current_position_pe} at ₹{current_ltp_pe}")
                     
                     if self.place_closing_order(close_side, current_ltp_pe, 'PE'):
                         success_count += 1
                         alert_manager.add_alert('success', 'PE Squared Off', 
-                                            f'PE {current_position_pe} position squared off at Rs.{current_ltp_pe}', 'success')
-                        logger.info(f"PE position squared off: {current_position_pe} at Rs.{current_ltp_pe}")
+                                            f'PE {current_position_pe} position squared off at ₹{current_ltp_pe}', 'success')
+                        logger.info(f"PE position squared off: {current_position_pe} at ₹{current_ltp_pe}")
                     else:
                         error_count += 1
                         alert_manager.add_alert('error', 'PE Square Off Failed', 
@@ -2101,7 +1504,8 @@ class TradingEngine:
                     scrip_name,
                     side,
                     config['quantity'],
-                    price
+                    price,
+                    0  # PNL for opening orders
                 )
                 if scrip_type == 'CE':
                     current_position_ce = side
@@ -2127,9 +1531,9 @@ class TradingEngine:
                 }
                 orders.append(order)
                 alert_manager.add_alert('trade', 'Position Opened',
-                                    f'{side} {scrip_type} at Rs.{price:.2f} - Quantity: {config["quantity"]}', 'success')
+                                    f'{side} {scrip_type} at ₹{price:.2f} - Quantity: {config["quantity"]}', 'success')
                 self.daily_trades += 1
-                logger.info(f"Position opened: {side} {scrip_type} at Rs.{price:.2f}")
+                logger.info(f"Position opened: {side} {scrip_type} at ₹{price:.2f}")
             else:
                 alert_manager.add_alert('error', 'Order Failed',
                                     f'Failed to place {side} order for {scrip_type}', 'error')
@@ -2164,7 +1568,7 @@ class TradingEngine:
                 logger.error(f"Invalid quantity: {config['quantity']}")
                 return False
             
-            logger.info(f"Placing {side} order for {scrip_type} - Scrip: {scrip_code}, Quantity: {config['quantity']}, Price: Rs.{price}")
+            logger.info(f"Placing {side} order for {scrip_type} - Scrip: {scrip_code}, Quantity: {config['quantity']}, Price: ₹{price}")
             
             if side == 'BUY':
                 order_success = Buy_place_order(scrip_code, config['quantity'], config['exchange'])
@@ -2181,7 +1585,7 @@ class TradingEngine:
             else:
                 pnl = (entry_price - price) * config['quantity']
             
-            logger.info(f"Calculated P&L for {scrip_type}: Rs.{pnl:.2f} (Entry: Rs.{entry_price}, Exit: Rs.{price}, Position: {current_position})")
+            logger.info(f"Calculated P&L for {scrip_type}: ₹{pnl:.2f} (Entry: ₹{entry_price}, Exit: ₹{price}, Position: {current_position})")
             
             self.update_trade_statistics(stats, pnl, trades)
             self.update_portfolio_on_close(entry_price, pnl)
@@ -2220,7 +1624,7 @@ class TradingEngine:
                 pe_stats['entry_price'] = 0
                 pe_stats['unrealized_pnl'] = 0
             
-            logger.info(f"Successfully closed {current_position} {scrip_type} position. P&L: Rs.{pnl:.2f}")
+            logger.info(f"Successfully closed {current_position} {scrip_type} position. P&L: ₹{pnl:.2f}")
             return True
             
         except Exception as e:
@@ -2297,7 +1701,8 @@ class TradingEngine:
                     scrip_name,
                     side,
                     config['quantity'],
-                    price
+                    price,
+                    pnl  # PNL for closing orders
                 )
                     entry_price = stats['entry_price']
                     
@@ -2371,7 +1776,7 @@ class TradingEngine:
                     
                     severity = 'success' if pnl > 0 else 'error'
                     alert_manager.add_alert('trade', 'Position Closed', 
-                                          f'{current_position} {scrip_type} closed. P&L: Rs.{pnl:.2f}', severity)
+                                          f'{current_position} {scrip_type} closed. P&L: ₹{pnl:.2f}', severity)
                     
                     if scrip_type == 'CE':
                         current_position_ce = None
@@ -2381,7 +1786,7 @@ class TradingEngine:
                         pe_stats['entry_price'] = 0
                     
                     self.daily_trades += 1
-                    logger.info(f"Position closed: {current_position} {scrip_type} P&L: Rs.{pnl:.2f}")
+                    logger.info(f"Position closed: {current_position} {scrip_type} P&L: ₹{pnl:.2f}")
                 else:
                     alert_manager.add_alert('error', 'Order Failed', 
                                           f'Failed to close {current_position} position for {scrip_type}', 'error')
@@ -2408,7 +1813,6 @@ def trading_loop():
     while trading_active:
         try:
             check_and_handle_price_difference()
-
             if not trading_paused and not scrip_update_in_progress:
                 trading_engine.calculate_time_period('CE')
                 trading_engine.calculate_time_period('PE')
@@ -2467,56 +1871,13 @@ def login():
     print(f"Expected credentials: Username='{fixed_username}', Password='{dynamic_password}'")
 
     if username == fixed_username and password == dynamic_password:
-        # Run scrip master update on every login
-        print("Updating scrip master data...")
-        update_success = update_scrip_master()
-
-        if update_success:
-            # Reload the scrip master data
-            load_scrip_master_from_csv('scripmaster.csv')
-            print("Scrip master data updated successfully")
-        else:
-            print("Failed to update scrip master data")
-            # We'll continue anyway as the existing data might still be usable
-
-        # Generate TOTP for token refresh and handle OAuth2 flow
-        auth_result = get_access_token()
-
-        if auth_result.get('auth_pending'):
-            # Authentication is pending, return TOTP for frontend display
-            return jsonify({
-                'success': True,
-                'auth_pending': True,
-                'totp_code': auth_result.get('totp_code'),
-                'message': 'Authentication requires TOTP. Please check the TOTP code.'
-            })
-        elif auth_result['success']:
-            # Authentication was already completed, redirect to dashboard
-            return jsonify({
-                'success': True,
-                'redirect_url': url_for('dashboard'),
-                'message': 'Login successful! Authentication completed automatically.'
-            })
-        else:
-            # If authentication fails, redirect to dashboard anyway (might use existing token)
-            return jsonify({
-                'success': True,
-                'redirect_url': url_for('dashboard'),
-                'message': 'Login successful but token refresh failed. Using existing token if available.'
-            })
+        return jsonify({'success': True, 'redirect_url': url_for('dashboard')})
     else:
         return jsonify({'success': False, 'message': 'Invalid username or password.'})
 
 
 @app.route('/dashboard')
 def dashboard():
-    global auth_completed, current_totp_code
-    # Check if authentication is complete
-    if not auth_completed:
-        # Reset authentication status
-        auth_completed = False
-        current_totp_code = None
-        return redirect(url_for('index'))
     return render_template('dashboard.html')
 
 @app.route('/api/scrips/exchanges')
@@ -2687,63 +2048,6 @@ def get_market_data(scrip_type):
         return jsonify({'error': f'Error: {str(e)}'}), 500
 
 
-@app.route('/api/generate_totp', methods=['POST'])
-def generate_totp_endpoint():
-    """API endpoint to generate TOTP for authentication"""
-    try:
-        result = get_access_token()
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"Error generating TOTP: {str(e)}")
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
-
-
-@app.route('/api/refresh_token', methods=['POST'])
-def refresh_token_endpoint():
-    """API endpoint to refresh access token"""
-    try:
-        data = request.get_json()
-        authorization_code = data.get('authorization_code')
-
-        if not authorization_code:
-            return jsonify({'success': False, 'message': 'Authorization code is required'}), 400
-
-        result = refresh_access_token(authorization_code)
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"Error refreshing token: {str(e)}")
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
-
-
-@app.route('/api/complete_login', methods=['POST'])
-def complete_login():
-    """API endpoint to complete login after token refresh"""
-    try:
-        data = request.get_json()
-        authorization_code = data.get('authorization_code')
-
-        if not authorization_code:
-            return jsonify({'success': False, 'message': 'Authorization code is required'}), 400
-
-        # Refresh the access token
-        result = refresh_access_token(authorization_code)
-
-        if result['success']:
-            return jsonify({
-                'success': True,
-                'redirect_url': url_for('dashboard'),
-                'message': 'Login completed successfully'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': result['message']
-            }), 400
-    except Exception as e:
-        logger.error(f"Error completing login: {str(e)}")
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
-
-
 @app.route('/api/trading_stats/<scrip_type>')
 def get_trading_stats(scrip_type):
     global ce_stats, pe_stats
@@ -2815,11 +2119,13 @@ def trade_history():
     try:
         df = pd.read_csv("order_history.csv")
 
-        # Convert Excel float date/time to readable formats
+        # Convert string date/time to datetime objects
         if 'Date' in df.columns:
-            df['Date'] = df['Date'].apply(excel_date_to_datetime)
+            # Handle DD-MM-YYYY format
+            df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y', errors='coerce')
         if 'Time' in df.columns:
-            df['Time'] = df['Time'].apply(excel_time_to_time)
+            # Time is already in HH:MM:SS format, keep as string
+            pass
 
         # Handle query parameters
         from_date = request.args.get('from_date')
@@ -2843,7 +2149,7 @@ def trade_history():
         if scrip_type:
             df = df[df['Scrip Type'].str.upper() == scrip_type.upper()]
 
-        # Optional PNL filter (if you later add a PNL column)
+        # PNL filter
         if 'PNL' in df.columns:
             if pnl_min is not None:
                 df = df[df['PNL'] >= pnl_min]
@@ -2859,22 +2165,6 @@ def trade_history():
 
     except Exception as e:
         return jsonify({'error': str(e), 'data': []})
-
-
-@app.route('/api/update_scrip_master', methods=['POST'])
-def update_scrip_master_endpoint():
-    """API endpoint to trigger scrip master update."""
-    try:
-        success = update_scrip_master()
-        if success:
-            # Reload the scrip master data
-            load_scrip_master_from_csv('scripmaster.csv')
-            return jsonify({'success': True, 'message': 'Scrip master updated successfully'})
-        else:
-            return jsonify({'success': False, 'message': 'Failed to update scrip master'}), 500
-    except Exception as e:
-        logger.error(f"Error updating scrip master: {str(e)}")
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
 
 
 
@@ -3059,6 +2349,40 @@ def get_current_scrip_codes():
     })
 
 
+@app.route('/api/generate_scripmaster_csv', methods=['POST'])
+def generate_scripmaster_csv_route():
+    """Trigger regeneration of scripmaster CSV (calls scripupdate.generate_scripmaster_csv)
+    and reload it into memory. This endpoint is intended to be called from the
+    dashboard settings UI when the user requests an immediate scripmaster refresh.
+    """
+    global scripmaster_df
+
+    try:
+        logger.info("Manual scripmaster generation requested via dashboard")
+
+        # Call the helper that generates the CSV file. It should return True/False
+        # or raise on error depending on its implementation in scripupdate.py
+        result = generate_scripmaster_csv()
+
+        # Attempt to reload the generated CSV into memory for the running app
+        loaded = load_scrip_master_from_csv('scripmaster.csv')
+
+        if result is True or result == 'ok' or loaded:
+            msg = 'Scrip master generated and loaded successfully.' if loaded else 'Scrip master generated but failed to load.'
+            alert_manager.add_alert('scrip_update', 'Scripmaster Updated', msg, 'success')
+            return jsonify({'success': True, 'message': msg})
+        else:
+            msg = 'Scripmaster generation returned falsey result.'
+            logger.warning(msg)
+            alert_manager.add_alert('scrip_update', 'Scripmaster Update Failed', msg, 'warning')
+            return jsonify({'success': False, 'message': msg}), 500
+
+    except Exception as e:
+        logger.error(f"Error generating scripmaster: {e}", exc_info=True)
+        alert_manager.add_alert('scrip_update', 'Scripmaster Update Error', str(e), 'error')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/analytics/pnl_chart')
 def get_pnl_chart():
     global trades_ce, trades_pe
@@ -3219,28 +2543,6 @@ if __name__ == '__main__':
         os.makedirs('templates')
     
     print("=== FIXED Real Data Trading Dashboard ===")
-    print("Dashboard available at: http://127.0.0.1:5012")
-    print(f"CE Scrip: {config['ce_scrip_code']}")
-    print(f"PE Scrip: {config['pe_scrip_code']}")
-    print(f"Exchange: {config['exchange']}")
-    print(f"Quantity: {config['quantity']}")
-    print(f"Capital: Rs.{config['capital']:,.2f}")
-    print(f"Auto Scrip Update: {'Enabled' if config.get('auto_scrip_update', 'enabled') == 'enabled' else 'Disabled'}")
-    print(f"Price Difference Threshold: {config.get('price_difference_threshold', 40.0)}%")
-    print("\n[ACTIVE] REAL DATA TRADING ACTIVE")
-    print("[WARNING] This system will place REAL orders using apifunction.py!")
-    print("[FEATURES] FIXED FEATURES:")
-    print("   - Proper global variable handling throughout")
-    print("   - Immediate scrip code updates when price difference exceeds threshold")
-    print("   - Complete history clearing and rebuilding with new data")
-    print("   - Proper workflow: Square off -> Pause 5s -> Update -> Resume")
-    print("   - Real-time range and range percentage updates")
-    print("   - All global variables properly declared at module level")
-    
+    print("Dashboard available at: http://127.0.0.1:5012")    
     alert_manager.add_alert('system', 'System Started', 'FIXED Real data trading dashboard initialized', 'success')
-
-    # For Docker/Gunicorn deployment, expose app for import
-if __name__ == "__main__":
-    # For Render deployment, use 0.0.0.0 and PORT environment variable
-    port = int(os.environ.get('PORT', 5012))
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    app.run(host='127.0.0.1', port=5012, debug=True, use_reloader=False)

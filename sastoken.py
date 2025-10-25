@@ -40,9 +40,9 @@ def get_oauth_authorization_url(redirect_url=None):
     if redirect_url is None:
         # Check if we're running in deployed environment
         if os.environ.get('SAS_PORT'):
-            # For deployed environments, use DEPLOYED_REDIRECT_URL with full domain
-            # This will be handled by the main app, not the OAuth service
-            return None  # Indicate that OAuth flow will be handled differently in deployed env
+            # For deployed environments, we can't generate a proper URL without knowing the base URL
+            # This function should be called with a proper redirect_url in deployed environments
+            raise ValueError("In deployed environment, redirect_url must be provided")
         else:
             redirect_url = LOCAL_REDIRECT_URL
 
@@ -105,44 +105,54 @@ def sasonline_oauth_login() -> dict:
         auth_url, _ = oauth.authorization_url(f'{BASE_URL}/oauth2/auth')
         return redirect(auth_url)
 
-    # Run server
-    def run_server():
-        app.run(host=HOST, port=PORT, debug=False, use_reloader=False)
+    # Only start the OAuth service when not in deployed environment
+    if not os.environ.get('SAS_PORT'):
+        # Run server
+        def run_server():
+            app.run(host=HOST, port=PORT, debug=False, use_reloader=False)
 
-    thread = threading.Thread(target=run_server, daemon=True)
-    thread.start()
-    time.sleep(1.5)  # Wait for server
+        thread = threading.Thread(target=run_server, daemon=True)
+        thread.start()
+        time.sleep(1.5)  # Wait for server
 
-    # Generate & Copy TOTP
-    try:
-        totp = pyotp.TOTP(TOTP_SECRET)
-        code = totp.now()
-        pyperclip.copy(code)
-        print(f"TOTP: {code} → Copied to clipboard!")
-    except:
-        print("TOTP failed")
+        # Generate & Copy TOTP
+        try:
+            totp = pyotp.TOTP(TOTP_SECRET)
+            code = totp.now()
+            pyperclip.copy(code)
+            print(f"TOTP: {code} → Copied to clipboard!")
+        except:
+            print("TOTP failed")
 
-    # Open browser
-    print("Opening browser...")
-    webbrowser.open(f'http://{HOST if HOST != "0.0.0.0" else "127.0.0.1"}:{PORT}/start')
-
-    # Wait for login
-    if shutdown_event.wait(timeout=180):
-        if access_token[0]:
-            # Instead of saving to file, we'll store in a global variable
-            # Import app module to set the global variable
-            try:
-                import app
-                app.access_token = access_token[0]
-                print("Login Success!")
-                print(app.access_token)
-                return {"success": True, "message": "Login successful and token stored in memory"}
-            except ImportError:
-                # If direct import fails, return token for app to handle
-                print("Login Success!")
-                return {"success": True, "message": "Login successful and token stored in memory", "token": access_token[0]}
-        else:
-            return {"success": False, "message": "No token received"}
+        # Open browser
+        print("Opening browser...")
+        webbrowser.open(f'http://{HOST if HOST != "0.0.0.0" else "127.0.0.1"}:{PORT}/start')
     else:
-        return {"success": False, "message": "Login timed out after 3 minutes"}
+        # In deployed environment, return a message indicating OAuth should be handled differently
+        print("Running in deployed environment. OAuth flow should be initiated through the main app.")
+        return {"success": False, "message": "OAuth flow should be initiated through the main app in deployed environment"}
+
+    # Wait for login (only in non-deployed environment)
+    if not os.environ.get('SAS_PORT'):
+        if shutdown_event.wait(timeout=180):
+            if access_token[0]:
+                # Instead of saving to file, we'll store in a global variable
+                # Import app module to set the global variable
+                try:
+                    import app
+                    app.access_token = access_token[0]
+                    print("Login Success!")
+                    print(app.access_token)
+                    return {"success": True, "message": "Login successful and token stored in memory"}
+                except ImportError:
+                    # If direct import fails, return token for app to handle
+                    print("Login Success!")
+                    return {"success": True, "message": "Login successful and token stored in memory", "token": access_token[0]}
+            else:
+                return {"success": False, "message": "No token received"}
+        else:
+            return {"success": False, "message": "Login timed out after 3 minutes"}
+    else:
+        # In deployed environment, OAuth flow is handled differently
+        return {"success": False, "message": "OAuth flow should be initiated through the main app in deployed environment"}
 

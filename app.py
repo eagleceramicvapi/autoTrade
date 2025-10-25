@@ -29,17 +29,72 @@ app = Flask(__name__)
 @app.route('/api/sas_login', methods=['POST'])
 def sas_login():
     try:
-        result = sasonline_oauth_login()
-        if result and result.get("success"):
-            # If token is returned in result, set it to global variable
-            if "token" in result:
-                global access_token
-                access_token = result["token"]
-            return jsonify({"status": "success", "message": "Login successful"}), 200
-        return jsonify({"status": "error", "message": "Login failed"}), 400
+        # For web deployment, return the OAuth authorization URL
+        # so the frontend can redirect the user to it
+        from sastoken import get_oauth_authorization_url, DEPLOYED_REDIRECT_URL
+        # Construct the full redirect URL using the request's base URL
+        base_url = request.url_root.rstrip('/')
+        redirect_url = base_url + DEPLOYED_REDIRECT_URL
+        auth_url = get_oauth_authorization_url(redirect_url)
+        return jsonify({"status": "redirect", "url": auth_url}), 200
     except Exception as e:
         logger.error(f"SAS login error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/sas_oauth_callback')
+def sas_oauth_callback():
+    """Handle OAuth callback from SAS Online"""
+    try:
+        # Import the OAuth session and config from sastoken
+        from sastoken import CLIENT_ID, CLIENT_SECRET, DEPLOYED_REDIRECT_URL, BASE_URL
+        from requests_oauthlib import OAuth2Session
+
+        # Construct the redirect URL using the request's base URL
+        base_url = request.url_root.rstrip('/')
+        redirect_url = base_url + DEPLOYED_REDIRECT_URL
+
+        # Create OAuth session and fetch token
+        oauth = OAuth2Session(CLIENT_ID, redirect_uri=redirect_url, scope='orders holdings')
+        token = oauth.fetch_token(
+            f'{BASE_URL}/oauth2/token',
+            client_secret=CLIENT_SECRET,
+            authorization_response=request.url
+        )
+
+        # Store the access token globally
+        global access_token
+        access_token = token['access_token']
+
+        # Return a success message that can be displayed to the user
+        return '''
+        <html>
+            <head><title>SAS Login Successful</title></head>
+            <body>
+                <h2>Login Successful!</h2>
+                <p>You have successfully logged in to SAS Online.</p>
+                <p>You can close this tab and return to the main application.</p>
+                <script>
+                    // Optionally notify the parent window if opened as popup
+                    if (window.opener) {
+                        window.opener.postMessage({type: 'sas-login-success'}, '*');
+                    }
+                </script>
+            </body>
+        </html>
+        ''', 200
+    except Exception as e:
+        logger.error(f"SAS OAuth callback error: {e}")
+        return f'''
+        <html>
+            <head><title>SAS Login Failed</title></head>
+            <body>
+                <h2>Login Failed</h2>
+                <p>An error occurred during login: {str(e)}</p>
+                <p>Please close this tab and try again.</p>
+            </body>
+        </html>
+        ''', 500
 
 # ============================================================================
 # GLOBAL VARIABLES - All declared at module level

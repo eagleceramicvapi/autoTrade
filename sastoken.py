@@ -17,31 +17,6 @@ logger = logging.getLogger(__name__)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # For local HTTP only
 
 
-# === HARDCODED CONFIG (Only you use this) ===
-CLIENT_ID = "SAS-CLIENT1"
-CLIENT_SECRET = "Hhtg74iYYZY1nSJUvDBxKntGqfigem6yKyYw9rlb2qSXyhEEs8BZEtw27KsIE1UI"
-LOCAL_REDIRECT_URL = "http://127.0.0.1:65015/"
-DEPLOYED_REDIRECT_URL = "/api/sas_oauth_callback"
-BASE_URL = "https://api.stocko.in"
-TOTP_SECRET = "T4JZGOUEE2G3NOCZ"
-TOKEN_FILE = "access_token.json"
-PORT = 65015
-
-
-def get_oauth_authorization_url(redirect_url=None):
-    """
-    Get the OAuth authorization URL for SASOnline.
-    Returns: authorization URL
-    """
-    # Use provided redirect_url or default to local redirect URL
-    if redirect_url is None:
-        redirect_url = LOCAL_REDIRECT_URL
-
-    oauth = OAuth2Session(CLIENT_ID, redirect_uri=redirect_url, scope='orders holdings')
-    auth_url, _ = oauth.authorization_url(f'{BASE_URL}/oauth2/auth')
-    return auth_url
-
-
 def sasonline_oauth_login() -> dict:
     """
     One-click SASOnline OAuth2 login.
@@ -50,6 +25,7 @@ def sasonline_oauth_login() -> dict:
     # === HARDCODED CONFIG (Only you use this) ===
     CLIENT_ID = "SAS-CLIENT1"
     CLIENT_SECRET = "Hhtg74iYYZY1nSJUvDBxKntGqfigem6yKyYw9rlb2qSXyhEEs8BZEtw27KsIE1UI"
+    REDIRECT_URL = "http://127.0.0.1:65015/"
     BASE_URL = "https://api.stocko.in"
     TOTP_SECRET = "T4JZGOUEE2G3NOCZ"
     TOKEN_FILE = "access_token.json"
@@ -67,7 +43,7 @@ def sasonline_oauth_login() -> dict:
     @app.route('/')
     def callback():
         try:
-            oauth = OAuth2Session(CLIENT_ID, redirect_uri=LOCAL_REDIRECT_URL, scope='orders holdings')
+            oauth = OAuth2Session(CLIENT_ID, redirect_uri=REDIRECT_URL, scope='orders holdings')
             token = oauth.fetch_token(
                 f'{BASE_URL}/oauth2/token',
                 client_secret=CLIENT_SECRET,
@@ -81,7 +57,7 @@ def sasonline_oauth_login() -> dict:
 
     @app.route('/start')
     def start():
-        oauth = OAuth2Session(CLIENT_ID, redirect_uri=LOCAL_REDIRECT_URL, scope='orders holdings')
+        oauth = OAuth2Session(CLIENT_ID, redirect_uri=REDIRECT_URL, scope='orders holdings')
         auth_url, _ = oauth.authorization_url(f'{BASE_URL}/oauth2/auth')
         return redirect(auth_url)
 

@@ -29,52 +29,16 @@ app = Flask(__name__)
 @app.route('/api/sas_login', methods=['POST'])
 def sas_login():
     try:
-        # For web deployment, we'll use the original local approach
-        # but we need to handle it differently since we can't start a local server
-        # that's accessible from the web
-        from sastoken import get_oauth_authorization_url, LOCAL_REDIRECT_URL
-        # We'll return the local redirect URL and let the frontend handle it
-        # The user will need to manually copy the authorization code
-        auth_url = get_oauth_authorization_url(LOCAL_REDIRECT_URL)
-        return jsonify({
-            "status": "manual",
-            "url": auth_url,
-            "message": "Please visit the URL and manually complete the login process. After login, you'll be redirected to a local address. Copy the full URL from your browser's address bar and paste it in the application."
-        }), 200
+        result = sasonline_oauth_login()
+        if result and result.get("success"):
+            # If token is returned in result, set it to global variable
+            if "token" in result:
+                global access_token
+                access_token = result["token"]
+            return jsonify({"status": "success", "message": "Login successful"}), 200
+        return jsonify({"status": "error", "message": "Login failed"}), 400
     except Exception as e:
         logger.error(f"SAS login error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@app.route('/api/sas_manual_callback', methods=['POST'])
-def sas_manual_callback():
-    """Handle manual OAuth callback processing"""
-    try:
-        from sastoken import CLIENT_ID, CLIENT_SECRET, LOCAL_REDIRECT_URL, BASE_URL
-        from requests_oauthlib import OAuth2Session
-        import json
-
-        data = request.get_json()
-        callback_url = data.get('callback_url', '')
-
-        if not callback_url:
-            return jsonify({"status": "error", "message": "No callback URL provided"}), 400
-
-        # Create OAuth session and fetch token using the provided callback URL
-        oauth = OAuth2Session(CLIENT_ID, redirect_uri=LOCAL_REDIRECT_URL, scope='orders holdings')
-        token = oauth.fetch_token(
-            f'{BASE_URL}/oauth2/token',
-            client_secret=CLIENT_SECRET,
-            authorization_response=callback_url
-        )
-
-        # Store the access token globally
-        global access_token
-        access_token = token['access_token']
-
-        return jsonify({"status": "success", "message": "Login successful"}), 200
-    except Exception as e:
-        logger.error(f"SAS manual callback error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # ============================================================================
@@ -457,7 +421,7 @@ def find_nearest_150_scrips():
         best_pe = None
         min_ce_diff = float('inf')
         min_pe_diff = float('inf')
-        target_ltp = config.get('target_ltp', 120)
+        target_ltp = config.get('target_ltp', 200)
 
         for _, scrip in ce_scrips.iterrows():
             ltp = get_ltp(scrip['ScripCode'])
@@ -2579,6 +2543,6 @@ if __name__ == '__main__':
         os.makedirs('templates')
     
     print("=== FIXED Real Data Trading Dashboard ===")
-    print("Dashboard available at: http://0.0.0.0:5012")    
+    print("Dashboard available at: http://127.0.0.1:5012")    
     alert_manager.add_alert('system', 'System Started', 'FIXED Real data trading dashboard initialized', 'success')
-    app.run(host='0.0.0.0', port=5012, debug=True, use_reloader=False)
+    app.run(host='127.0.0.1', port=5012, debug=True, use_reloader=False)

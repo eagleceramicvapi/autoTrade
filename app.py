@@ -14,7 +14,7 @@ import sys
 import pandas as pd
 import webbrowser
 from scripupdate import generate_scripmaster_csv
-from sastoken import sasonline_oauth_login, get_oauth_authorization_url
+from sastoken import sasonline_oauth_login, get_oauth_authorization_url, exchange_code_for_token, generate_totp
 from requests_oauthlib import OAuth2Session
 
 # Configure logging
@@ -60,33 +60,22 @@ def sas_auth_url():
 def sas_oauth_callback():
     """OAuth callback endpoint for deployed environment"""
     try:
-        # Get the authorization code from the callback
-        code = request.args.get('code')
-        if code:
-            # Exchange the authorization code for an access token
-            # Get the configuration from sastoken
-            from sastoken import CLIENT_ID, CLIENT_SECRET, BASE_URL
+        # Get the base URL of the current request for redirect URI
+        base_url = request.url_root.rstrip('/')
+        redirect_uri = f"{base_url}/api/sas_oauth_callback"
 
-            # Get the base URL of the current request for redirect URI
-            base_url = request.url_root.rstrip('/')
-            redirect_uri = f"{base_url}/api/sas_oauth_callback"
+        # Exchange the authorization response for an access token using sastoken utility
+        access_token_value = exchange_code_for_token(request.url, redirect_uri)
 
-            # Create OAuth2 session and exchange code for token
-            oauth = OAuth2Session(CLIENT_ID, redirect_uri=redirect_uri)
-            token = oauth.fetch_token(
-                f'{BASE_URL}/oauth2/token',
-                client_secret=CLIENT_SECRET,
-                code=code
-            )
-
+        if access_token_value:
             # Store the access token globally
             global access_token
-            access_token = token.get('access_token')
+            access_token = access_token_value
 
             # Return success response
             return "<h2>OAuth Success!</h2><p>Authentication successful. You can close this tab and return to the application.</p>", 200
         else:
-            return "<h2>OAuth Error</h2><p>No authorization code received.</p>", 400
+            return "<h2>OAuth Error</h2><p>Failed to exchange authorization code for access token.</p>", 400
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
         return f"<h2>OAuth Error</h2><p>{str(e)}</p>", 500

@@ -2270,12 +2270,12 @@ def stop_trading():
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def trading_config():
-    global config, portfolio_data
-    
+    global config, portfolio_data, access_token
+
     if request.method == 'POST':
         data = request.get_json()
         logger.info(f"Received config data: {data}")
-        
+
         if 'ce_scrip_code' in data and data['ce_scrip_code'] != config['ce_scrip_code']:
             new_ce_code = data['ce_scrip_code']
             config['ce_scrip_code'] = new_ce_code
@@ -2287,7 +2287,7 @@ def trading_config():
             config['pe_scrip_code'] = new_pe_code
             config['pe_scrip_name'] = get_scrip_name(new_pe_code)
             logger.info(f"PE Scrip Code updated to {new_pe_code}, Name set to {config['pe_scrip_name']}")
-            
+
         for key in ['quantity', 'capital', 'stop_loss_percent', 'target_profit_percent', 'max_trades_per_day',
                     'trading_start_time', 'trading_end_time', 'broker', 'min_range_for_trading',
                     'exchange', 'auto_scrip_update', 'price_difference_threshold', 'strategy_range']:
@@ -2306,15 +2306,39 @@ def trading_config():
                         return jsonify({'success': False, 'message': f"Invalid exchange value: {data[key]}"}), 400
                 else:
                     config[key] = data[key]
-        
+
+        # Handle manual access token update
+        if 'access_token' in data:
+            access_token = data['access_token']
+            logger.info("Access token updated manually")
+
         if 'capital' in data:
             portfolio_data['available_balance'] = config['capital']
             portfolio_data['free_margin'] = config['capital'] - portfolio_data['used_margin']
 
         alert_manager.add_alert('config', 'Configuration Updated', 'Trading configuration has been updated', 'info')
         return jsonify({'success': True, 'message': 'Configuration updated'})
-    
+
     return jsonify(config)
+
+@app.route('/api/access_token', methods=['GET', 'POST'])
+def access_token_api():
+    """API endpoint to get or set the access token"""
+    global access_token
+
+    if request.method == 'POST':
+        data = request.get_json()
+        if 'token' in data:
+            access_token = data['token']
+            logger.info("Access token updated via API")
+            alert_manager.add_alert('config', 'Token Updated', 'Access token has been updated', 'info')
+            return jsonify({'success': True, 'message': 'Access token updated'})
+        else:
+            return jsonify({'success': False, 'message': 'Token not provided'}), 400
+
+    # For GET request, return current token status (not the actual token for security)
+    has_token = access_token is not None and access_token != ""
+    return jsonify({'has_token': has_token})
 
 
 @app.route('/api/enhanced_square_off', methods=['POST'])

@@ -2543,6 +2543,6 @@ if __name__ == '__main__':
         os.makedirs('templates')
     
     print("=== FIXED Real Data Trading Dashboard ===")
-    print("Dashboard available at: http://127.0.0.1:5012")    
+    print("Dashboard available at: http://0.0.0.0:5012")    
     alert_manager.add_alert('system', 'System Started', 'FIXED Real data trading dashboard initialized', 'success')
-    app.run(host='127.0.0.1', port=5012, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5012, debug=True, use_reloader=False)

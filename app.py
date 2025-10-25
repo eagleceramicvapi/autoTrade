@@ -29,72 +29,53 @@ app = Flask(__name__)
 @app.route('/api/sas_login', methods=['POST'])
 def sas_login():
     try:
-        # For web deployment, return the OAuth authorization URL
-        # so the frontend can redirect the user to it
-        from sastoken import get_oauth_authorization_url, DEPLOYED_REDIRECT_URL
-        # Construct the full redirect URL using the request's base URL
-        base_url = request.url_root.rstrip('/')
-        redirect_url = base_url + DEPLOYED_REDIRECT_URL
-        auth_url = get_oauth_authorization_url(redirect_url)
-        return jsonify({"status": "redirect", "url": auth_url}), 200
+        # For web deployment, we'll use the original local approach
+        # but we need to handle it differently since we can't start a local server
+        # that's accessible from the web
+        from sastoken import get_oauth_authorization_url, LOCAL_REDIRECT_URL
+        # We'll return the local redirect URL and let the frontend handle it
+        # The user will need to manually copy the authorization code
+        auth_url = get_oauth_authorization_url(LOCAL_REDIRECT_URL)
+        return jsonify({
+            "status": "manual",
+            "url": auth_url,
+            "message": "Please visit the URL and manually complete the login process. After login, you'll be redirected to a local address. Copy the full URL from your browser's address bar and paste it in the application."
+        }), 200
     except Exception as e:
         logger.error(f"SAS login error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/sas_oauth_callback')
-def sas_oauth_callback():
-    """Handle OAuth callback from SAS Online"""
+@app.route('/api/sas_manual_callback', methods=['POST'])
+def sas_manual_callback():
+    """Handle manual OAuth callback processing"""
     try:
-        # Import the OAuth session and config from sastoken
-        from sastoken import CLIENT_ID, CLIENT_SECRET, DEPLOYED_REDIRECT_URL, BASE_URL
+        from sastoken import CLIENT_ID, CLIENT_SECRET, LOCAL_REDIRECT_URL, BASE_URL
         from requests_oauthlib import OAuth2Session
+        import json
 
-        # Construct the redirect URL using the request's base URL
-        base_url = request.url_root.rstrip('/')
-        redirect_url = base_url + DEPLOYED_REDIRECT_URL
+        data = request.get_json()
+        callback_url = data.get('callback_url', '')
 
-        # Create OAuth session and fetch token
-        oauth = OAuth2Session(CLIENT_ID, redirect_uri=redirect_url, scope='orders holdings')
+        if not callback_url:
+            return jsonify({"status": "error", "message": "No callback URL provided"}), 400
+
+        # Create OAuth session and fetch token using the provided callback URL
+        oauth = OAuth2Session(CLIENT_ID, redirect_uri=LOCAL_REDIRECT_URL, scope='orders holdings')
         token = oauth.fetch_token(
             f'{BASE_URL}/oauth2/token',
             client_secret=CLIENT_SECRET,
-            authorization_response=request.url
+            authorization_response=callback_url
         )
 
         # Store the access token globally
         global access_token
         access_token = token['access_token']
 
-        # Return a success message that can be displayed to the user
-        return '''
-        <html>
-            <head><title>SAS Login Successful</title></head>
-            <body>
-                <h2>Login Successful!</h2>
-                <p>You have successfully logged in to SAS Online.</p>
-                <p>You can close this tab and return to the main application.</p>
-                <script>
-                    // Optionally notify the parent window if opened as popup
-                    if (window.opener) {
-                        window.opener.postMessage({type: 'sas-login-success'}, '*');
-                    }
-                </script>
-            </body>
-        </html>
-        ''', 200
+        return jsonify({"status": "success", "message": "Login successful"}), 200
     except Exception as e:
-        logger.error(f"SAS OAuth callback error: {e}")
-        return f'''
-        <html>
-            <head><title>SAS Login Failed</title></head>
-            <body>
-                <h2>Login Failed</h2>
-                <p>An error occurred during login: {str(e)}</p>
-                <p>Please close this tab and try again.</p>
-            </body>
-        </html>
-        ''', 500
+        logger.error(f"SAS manual callback error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ============================================================================
 # GLOBAL VARIABLES - All declared at module level

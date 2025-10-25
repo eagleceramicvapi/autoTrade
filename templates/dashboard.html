@@ -3528,7 +3528,36 @@ async function performSASLogin() {
 
     const data = await response.json();
 
-    if (response.ok && data.status === "redirect" && data.url) {
+    if (response.ok && data.status === "manual" && data.url) {
+      // For the manual approach, we'll prompt the user to visit the URL
+      // and then paste the resulting URL back
+      const userConfirmed = confirm(data.message + '\n\nClick OK to open the login URL in a new tab.');
+      if (userConfirmed) {
+        window.open(data.url, '_blank');
+        // Prompt user to paste the callback URL
+        const callbackUrl = prompt('After completing the login, you will be redirected to a local address. Please copy the full URL from your browser\'s address bar and paste it here:');
+        if (callbackUrl) {
+          // Send the callback URL to the backend to process
+          const processResponse = await fetch('/api/sas_manual_callback', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ callback_url: callbackUrl })
+          });
+
+          const processData = await processResponse.json();
+
+          if (processResponse.ok && (processData.success || processData.status === "success")) {
+            showToast('Login Successful', 'Successfully logged in to SAS Online', 'success');
+          } else {
+            showToast('Login Failed', processData.message || 'Failed to process login callback', 'error');
+          }
+        } else {
+          showToast('Login Cancelled', 'Login process was cancelled', 'warning');
+        }
+      }
+    } else if (response.ok && data.status === "redirect" && data.url) {
       // Open the OAuth URL in a new tab/window for the user to complete login
       window.open(data.url, '_blank');
       showToast('Login Started', 'Please complete the login in the new tab', 'info');

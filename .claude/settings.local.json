@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__render__list_logs",
+      "Bash(dir:*)",
+      "mcp__render__update_web_service",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "mcp__render__list_deploys",
+      "Bash(timeout 300 bash -c:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
